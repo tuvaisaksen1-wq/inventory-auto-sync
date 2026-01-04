@@ -1,12 +1,18 @@
-import "@shopify/polaris/build/esm/styles.css";
-import enTranslations from "@shopify/polaris/locales/en.json";
-import { AppProvider } from "@shopify/polaris";
-import { Outlet } from "react-router";
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import "./tailwind.css?url";
 
 export default function Root() {
   return (
-    <AppProvider i18n={enTranslations}>
-      <Outlet />
-    </AppProvider>
+    <html lang="en">
+      <head>
+        <Meta />
+        <Links />
+      </head>
+      <body>
+        <Outlet />
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
   );
 }
