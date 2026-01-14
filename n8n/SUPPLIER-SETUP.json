@@ -1,0 +1,982 @@
+{
+  "name": "SUPPLIER-SETUP",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "={{`https://${$json.profile.shop.domain}/admin/api/2024-01/shop.json`}}",
+        "options": {
+          "fullResponse": true
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $json.profile.shop.access_token }}"
+            }
+          ]
+        }
+      },
+      "id": "d132b7ae-307b-4fe6-a0c1-db8454fa5997",
+      "name": "Test Shopify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        336,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.statusCode}}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "203d70a6-3e6f-457b-9746-29d18461855a",
+      "name": "Shopify OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        640,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    success: false,\n    stage: \"shopify_test\",\n    message: \"Klarte ikke å koble til Shopify. Sjekk domene eller API-nøkkel.\",\n    details: $json\n  }\n}];\n"
+      },
+      "id": "0702cab7-83c6-419a-84f6-356c372cf1cb",
+      "name": "Error: Shopify Test Failed",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        880,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('test profil').item.json.profile.connection.sheet_url }}",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('test profil').item.json.profile.connection.sheet_name }}",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "3544e840-0be3-49f6-9011-17c0c5bc02e4",
+      "name": "Test Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [
+        1536,
+        816
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WaFwzjQ1tlaQmGgT",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{Object.keys($json).length}}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "id": "c9f519d4-68f0-417c-8641-e94a00a6fb6a",
+      "name": "Sheet OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    success: false,\n    stage: \"sheet_test\",\n    message: \"Klarte ikke å lese Google Sheet. Sjekk deling, URL eller ark-navn.\",\n    details: $json\n  }\n}];\n"
+      },
+      "id": "34609d19-ad04-478d-8fc7-d3517b067cd6",
+      "name": "Error: Sheet Test Failed",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        1152
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  json: {\n    success: false,\n    stage: \"shopify_test\",\n    message: \"Klarte ikke å koble til Shopify. Sjekk domene eller API-nøkkel.\",\n    details: $json\n  }\n}];\n"
+      },
+      "id": "a55c4659-9079-429e-81ec-ddc684c82ba0",
+      "name": "Error: Shopify Test Failed1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const profile = {\ncustomer_id: \"demo_customer_1\",\nsupplier_id: \"brandstreettokyo\",\nname: \"Brand Street Tokyo\",\nstatus: \"active\",\n\nconnection_type: \"google_sheet\",\nmatching_key: \"sku\",\n\nconnection: {\ntype: \"google_sheet\",\nsheet_url: \"https://docs.google.com/spreadsheets/d/1CdAR76Xc0fWf1txFH7lxxd6Pprz6I_3iVA2nSZN0A_E/edit?usp=sharing\",\nsheet_name: \"test\",\ntabs: {\nsource: \"test\",\nheaderRow: 1,\nmatch_col: \"A\",\nqty_col: \"B\",\n},\n},\n\nshop: {\ndomain: \"testbutik679865.myshopify.com\",\nplatform: \"shopify\",\naccess_token: \"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\",\nlocation_id: \"111849308341\",\n\n},\n\nfrequency: \"6h\",\nnotifications: {\nmode: \"critical_only\",\nemail: \"tuvaisaksen1@gmail.com\",\nsms: [],\nslack: [],\n},\n};\nreturn [{ json: { profile } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        1440
+      ],
+      "id": "f7858118-8830-4b52-9325-a757fc4226a5",
+      "name": "test profil"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.supplier_profiles (\n  customer_id,\n  supplier_id,\n  name,\n  status,\n  connection_type,\n  matching_key,\n  connection,\n  shop,\n  frequency,\n  notifications\n)\nVALUES (\n  '{{ $json.profile.customer_id }}',\n  '{{ $json.profile.supplier_id }}',\n  '{{ $json.profile.name }}',\n  '{{ $json.profile.status }}',\n  '{{ $json.profile.connection_type }}',\n  '{{ $json.profile.matching_key }}',\n  '{{ $json.profile.connection ? JSON.stringify($json.profile.connection) : \"null\" }}'::jsonb,\n  '{{ $json.profile.shop ? JSON.stringify($json.profile.shop) : \"null\" }}'::jsonb,\n  '{{ $json.profile.frequency }}',\n  '{{ $json.profile.notifications ? JSON.stringify($json.profile.notifications) : \"null\" }}'::jsonb\n)\nON CONFLICT (supplier_id)\nDO UPDATE SET\n  customer_id      = EXCLUDED.customer_id,\n  name             = EXCLUDED.name,\n  status           = EXCLUDED.status,\n  connection_type  = EXCLUDED.connection_type,\n  matching_key     = EXCLUDED.matching_key,\n  connection       = EXCLUDED.connection,\n  shop             = EXCLUDED.shop,\n  frequency        = EXCLUDED.frequency,\n  notifications    = EXCLUDED.notifications;\n\n\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        1456
+      ],
+      "name": "Postgres_UPSERT",
+      "id": "f0eb1614-4ed8-47f4-b3e7-74d48a1f584c",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2752,
+        1456
+      ],
+      "id": "afddb61c-fcb4-4aed-8f88-7f49f9f4636e",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "content": "✅ SUPPLIER-SETUP — komplett, enkel forklaring\n\n(Dette brukes når en kunde legger til eller oppdaterer en leverandør.)\n\n🎯 Mål med workflowen:\n\nTeste om Shopify virker\n\nTeste om Google Sheet (eller annen kilde) virker\n\nValidere alt\n\nLagre profilen i databasen (UPSERT)",
+        "height": 368
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1f30dd6b-25fe-4d99-a673-fd950087cca5",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "content": "1. Manual Trigger\n\nStarter workflowen når du trykker “Execute”.\n\nMÅ BYTTES UT",
+        "height": 144
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        672
+      ],
+      "id": "eb9a8ae5-92bd-4086-9666-f943b9716254",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "2. test profil (Code node)\n\nHva gjør den?\nLager en eksempel-profil for testing.\nHvorfor?\nFor å kunne teste hele oppsettet uten appen.\n\nLEGG TIL first_sync_completed\n\nMÅ BYTTES UT\n\n",
+        "height": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        64,
+        1600
+      ],
+      "id": "1fe5eba0-c281-42e2-bf3c-f03b124d1ac9",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "3. Test Shopify (HTTP Request)\n\nHva gjør den?\nSjekker:\n\ndomenet\n\nAPI-nøkkelen\n\nat Shopify faktisk svarer\n\nHvorfor?\nHvis Shopify ikke virker → ingen vits å lagre profilen.",
+        "height": 304
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        256,
+        528
+      ],
+      "id": "a64b975d-23d0-4474-bbd6-dfbc35314eb4",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "4. Shopify OK? (IF)\n\nHva gjør den?\nSjekker om Shopify ga status 200.\nHvis NEI → send til “Shopify Test Failed”."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        640
+      ],
+      "id": "18cea99e-7a7b-4dd2-ade2-2130d444b568",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "5. Locations ID test\n\nHva gjør den?\nHenter alle locations.\nHvorfor?\nFor å sjekke om location_id kunden valgte er ekte."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        640
+      ],
+      "id": "db47b116-eb74-4a32-b82e-2b0fd61a22be",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "6. Location ID ok?\n\nHva gjør den?\nSjekker om location_id finnes i Shopify.\nHvis NEI → stopp, og returner feil."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        640
+      ],
+      "id": "87ce0c9f-780c-4ba6-abc9-c70fea0e20e1",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "SPØRSMÅL\nHva om kunden har flere location id?\n\nHva med aktiv og ikke aktiv setup ",
+        "height": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        272,
+        160
+      ],
+      "id": "c665e1f6-1d47-4f59-8d6e-7ad9d1c93c5a",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://testbutik679865.myshopify.com/admin/api/2024-01/locations.json' }}",
+        "options": {
+          "fullResponse": true
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $('test profil').item.json.profile.shop.access_token }}"
+            }
+          ]
+        }
+      },
+      "id": "21947d06-91ce-4c9a-ac26-f22ddbeba359",
+      "name": "Location ID test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        944,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6962d502-022d-4ff2-90a1-3ae81da277e9",
+              "leftValue": "={{ \n  $json.body.locations.some(\n    l => String(l.id) === String($('test profil').item.json.profile.shop.location_id)\n  ) \n}}\n\n",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1232,
+        832
+      ],
+      "id": "0779d1eb-8ee6-4d39-9e29-842da9d06d09",
+      "name": "Location ID ok?"
+    },
+    {
+      "parameters": {
+        "content": "7. Test Google Sheet\n\nHva gjør den?\nPrøver å åpne Google Sheet basert på URL og tab-navn.",
+        "height": 128
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1456,
+        672
+      ],
+      "id": "9e48c1f6-e125-4951-acf0-64f558e7d6f1",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "8. Sheet OK? (IF)\n\nHvis JA: gå videre\nHvis NEI: feilmelding.",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        688
+      ],
+      "id": "e592f861-ba6f-4e39-b43b-f99109bdb58b",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "9. Merge\n\nSamler alle test-resultater til én output-strøm før lagring.",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2672,
+        1312
+      ],
+      "id": "ce3eb794-d3cb-4630-81d6-7638b6c39d14",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "content": "10. Postgres_UPSERT\n\nHva gjør den?\nLagrer eller oppdaterer leverandør-profilen i databasen.\n\nOppdaterer alt hvis leverandøren allerede finnes lager ny hvis ikke\n\nHvorfor?\nFor å garantere at profilen alltid er oppdatert.",
+        "height": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3024,
+        1136
+      ],
+      "id": "e57ac8dc-107a-4a74-a916-7998f354a3d6",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {
+        "content": "2. Unngå Misbruk ved Oppdatering\nDu vil forhindre at kunder misbruker denne \"umiddelbare sync\"-funksjonen ved å bare endre en liten detalj i leverandørprofilen.\n\nLøsning: Begrens den direkte utløsningen til å kun skje én gang (eller under spesifikke forhold).\n\nSjekk i databasen: I SUPPLIER-SETUP, etter at du har hentet profildata (før Postgres_UPSERT), sjekker du om feltet first_sync_completed (eller lignende) er satt til true i databasen.\n\nLogikk:\n\nHvis first_sync_completed er null / false: Utfør den direkte \"Execute Workflow\"-kjøringen (som beskrevet i punkt 1).\n\nEtter at kjøringen er fullført: Sett first_sync_completed til true i databasen.\n\nHvis first_sync_completed er true: Ikke utfør den direkte kjøringen. Gi kunden beskjed om at \"Din profil er oppdatert. Lager synkroniseres ved neste planlagte kjøring (f.eks. om 30 minutter).\"\n\nUtløser,Logikk,Mål\nSUPPLIER-SETUP (Første gang),Direkte kall til LAGERSYKRONISERING med tvungen oppdatering.,CX: Umiddelbar tilbakemelding og oppfyllelse.\nSUPPLIER-SETUP (Oppdatering),Profilen oppdateres. Ingen direkte kall.,Sikkerhet/Ytelse: Unngå unødvendig misbruk av ressurser.\nMaster Scheduler (Hver time),Kall til LAGERSYKRONISERING med sammenligning/snapshot-logikk.,Drift: Effektiv og kontinuerlig vedlikehold av lageret.",
+        "height": 496,
+        "width": 704
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        0
+      ],
+      "id": "ffa14e97-2be3-4c81-a58a-86c52fcbe193",
+      "name": "Sticky Note13"
+    },
+    {
+      "parameters": {
+        "content": "Postgres_UPSERT i SUPPLIER-SETUP\nFormål: Lagre Leverandørprofilen\nHva den gjør: Den oppretter eller oppdaterer en rad i tabellen som inneholder data/informasjon om leverandøren.\n\nMålgruppe/Tabell: supplier_profiles (eller lignende).\n\nData som lagres:\n\nsupplier_id (Nøkkel)\n\nname\n\nconnection_type (Google Sheet, API, etc.)\n\nconnection_details (URL, API-nøkler, Sheet ID)\n\nstatus (active/inactive)\n\n... og statusfeltet for engangskjøring (first_sync_completed)\n\nDenne UPSERT-en er nødvendig for å fullføre oppsettet og gjøre leverandøren klar for planlagt kjøring i Master Scheduler.",
+        "height": 480,
+        "width": 400
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2992,
+        1648
+      ],
+      "id": "0529de4a-c9a0-4d4e-bd16-3cb334631621",
+      "name": "Sticky Note14"
+    },
+    {
+      "parameters": {
+        "content": "DEN MÅ TRIGGER NÅR NOEN I APPEN/ELLER HVA NÅ ENN LAGER EN NY LEVERANDØRPROFIL",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        1040
+      ],
+      "id": "6f11a1dd-1b82-407a-8fb3-b96bc07b8886",
+      "name": "Sticky Note15"
+    },
+    {
+      "parameters": {
+        "content": "1. Hvorfor SUPPLIER-SETUP ikke skal teste alle produkter\n\nHensikten med SUPPLIER-SETUP er å sikre at tilkoblingene fungerer (autentisering, tillatelser og grunnleggende struktur er riktig), ikke å validere alle de tusenvis av produktene.\n\nSjekk i SUPPLIER-SETUP\nFormålShopify OK?Kan vi koble oss til butikken (API-nøkkel gyldig)?\nLocation ID OK?\nEr Location ID gyldig og tilgjengelig for API-nøkkelen?\nSheet OK?Eksisterer arket og kan vi lese det?\nMatching OK?(Mangler) Kan vi identifisere noen varer med matchingsnøkkelen?\n\nHvis SUPPLIER-SETUP skulle sjekke alle produkter for match, ville oppsettet ta lang tid, og det ville være unødvendig bruk av ressurser.",
+        "height": 352,
+        "width": 464
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        144
+      ],
+      "id": "4c24b6a6-c8ba-4eb5-9dc5-c6c7255a82a5",
+      "name": "Sticky Note16"
+    },
+    {
+      "parameters": {
+        "content": "1. Misbruk, Kontroll. Du er bekymret for at kunden kan misbruke \"umiddelbar sync\" ved å endre noe lite. Det er derfor vi må innføre en kontrollmekanisme.\n\nUPSERT-noden i SUPPLIER-SETUP (Kontroll-mekanismen)Den nye Postgres_UPSERT-noden du skal legge til, har bare ett formål: å sette en lås på leverandørprofilen.\n\nTabell: supplier_profiles\n\nOppdaterer: Feltet first_sync_completed = TRUE. Dette hindrer misbruk ved å legge til en If-node tidlig i \n\nSUPPLIER-SETUP-flowen:Kontroll-mekanismenStegHvor det skjer\n\nSjekk: Hent profilen og se om first_sync_completed allerede er TRUE.Tidlig i SUPPLIER-SETUP\n\nHandling: Hvis TRUE: Send kunden direkte til sluttmeldingen (\"Profilen er oppdatert, synkronisering skjer ved neste planlagte kjøring\"). Hvis FALSE: Kjør Execute Workflow for umiddelbar sync.I en If-node\n\nLås (Din UPSERT):Sett first_sync_completed = TRUE etter at syncen er fullført. Den nye UPSERT-noden på slutten av SUPPLIER-SETUP\n\nKonklusjon: Den nye UPSERT-en hindrer misbruk fordi den endrer selve oppsett-statusen (supplier_profiles), mens UPSERT-en i LAGERSYKRONISERING kun lagrer produktdata (inventory_snapshots).",
+        "height": 496,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4224,
+        2512
+      ],
+      "id": "4b04fd16-21d5-49d1-a2a7-6f4758fb68c7",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "da999cc8-e48c-48df-9b83-f64db0a7e074",
+              "leftValue": "={{ $result.mismatches_logged }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4224,
+        1440
+      ],
+      "id": "6f7f04ff-86b5-42f0-bd91-cb81b1145db9",
+      "name": "Total Suksess?"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Oppsettet er fullført og alt er i orden! Vi synkroniserte {{ $result.successful_updates }} varer umiddelbart uten feil.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4592,
+        1312
+      ],
+      "id": "78d5b1f3-bd95-48b3-9e39-d72d961f5fef",
+      "name": "Perfekt full suksess melding"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bd50efb4-04a0-4c1a-a0a3-91b697ce9fda",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4592,
+        1616
+      ],
+      "id": "98d86cda-67f4-462d-9213-ed4b11c1c4ef",
+      "name": "Delvis Suksess?"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Oppsettet er fullført, men det ble funnet feil. Vi synkroniserte {{ $result.successful_updates }} varer, men {{ $result.mismatches_logged }} varer manglet en match. En rapport er loggført.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4912,
+        1552
+      ],
+      "id": "4631c315-0c7f-4f49-834e-460be02e1363",
+      "name": "Delvis Suksess-melding"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ADVARSEL: Synkroniseringen feilet for alle varer. Vi fant {{ $result.mismatches_logged }} varer som manglet match. Kontroller din matchingsnøkkel (SKU/EAN) og datakilden umiddelbart. Kontakt support for feilsøking.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        4912,
+        1744
+      ],
+      "id": "2de37ed9-487d-46fa-ac35-32f3e0c4773f",
+      "name": "Total feil melding"
+    },
+    {
+      "parameters": {
+        "content": "If-noder: \n\nSjekker resultatet (total suksess, delvis suksess eller total feil) og sender riktig sluttmelding til brukeren.\t\n\nGir klar kommunikasjon og sørger for at kunden får en nøyaktig",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4288,
+        1712
+      ],
+      "id": "afcc9dc9-fc35-47db-bcdc-ca5c3f368c56",
+      "name": "Sticky Note17"
+    },
+    {
+      "parameters": {
+        "content": "Execute Workflow: kaller LAGERSYKRONISERING direkte etter oppsett, og venter på svaret.\t\n\nKundeopplevelse: Umiddelbar synkronisering ved oppsett (i stedet for å vente på scheduler).",
+        "height": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3776,
+        1648
+      ],
+      "id": "7652510a-5617-46d3-a5e4-ae28e2f0fad8",
+      "name": "Sticky Note18"
+    },
+    {
+      "parameters": {
+        "content": "MEN HVA NÅR DET FORANDRER FRA FØRSTE SYNK TIL KONUELIG MED TANKTE Å POSTGRES TABELLEN"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3392,
+        1264
+      ],
+      "id": "bc3fc025-0523-4ffb-96e5-af52b5d8e81f",
+      "name": "Sticky Note19"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5eb55c6c-7133-4386-9a37-a431f1e354e4",
+              "leftValue": "={{ $json.first_sync_completed }}",
+              "rightValue": "=TRUE",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3440,
+        1456
+      ],
+      "id": "7dc0c983-d82e-42b1-8d06-7d6d6794579c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Profilen din er oppdatert. Første synkronisering er allerede fullført, og lageret vil synkroniseres ved neste planlagte kjøring.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3488,
+        1984
+      ],
+      "id": "de43e217-ee92-4635-be2d-cba23b59c49b",
+      "name": "Kjør Første Sync?"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "rruFbrmcS19bWEN7",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/rruFbrmcS19bWEN7",
+          "cachedResultName": "LAGERSYKRONISERING"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3840,
+        1440
+      ],
+      "id": "d1b79fef-f1ff-4043-91e8-159ee94c8d27",
+      "name": "Call 'LAGERSYKRONISERING'"
+    },
+    {
+      "parameters": {
+        "content": "De tre forskjellige sluttmeldingene.\tAvslutning: Gir kunden en bekreftelse og en nøyaktig rapport om synkroniseringsresultatet.",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4768,
+        1920
+      ],
+      "id": "1e9bded9-456e-4097-9879-de9496d00b6e",
+      "name": "Sticky Note20"
+    },
+    {
+      "parameters": {
+        "content": "2. I SUPPLIER-SETUP (Du har kommet langt!)Du har startet med å sette opp sluttlogikken. OppgaveStatusHva du må gjøre NÅI. Kontroll mot Misbruk (Starten)MANGLERDu mangler fortsatt Postgres SELECT og If-node i starten for å sjekke om first_sync_completed allerede er TRUE.II. Fullføring (Slutten)DU HAR STARTET!Du har satt opp Call 'LAGERSYKRONISERING', Total Suksess? og Delvis Suksess?.Postgres_UPSERT (Sett Lås)MANGLERSett inn Postgres_UPSERT-noden etter Call 'LAGERSYKRONISERING' for å sette first_sync_completed = TRUE.Koble RapporteringMANGLERKoble TRUE-utgangen fra Total Suksess? til Perfekt Suksess-melding, og FALSE-utgangen fra Delvis Suksess? til Total Feil-melding.",
+        "height": 240,
+        "width": 592
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3552,
+        2528
+      ],
+      "id": "6bfcabbd-2d24-42e4-985d-f962b634d93a",
+      "name": "Sticky Note21"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "supplier-setup",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        896
+      ],
+      "id": "4e573a7b-55f4-4eae-980e-477b247bc1a8",
+      "name": "Webhook",
+      "webhookId": "e1b45d48-8083-4cd7-bf8a-e8276a007dfd"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Test Shopify": {
+      "main": [
+        [
+          {
+            "node": "Shopify OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify OK?": {
+      "main": [
+        [
+          {
+            "node": "Location ID test",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Shopify Test Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Sheet OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheet OK?": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Error: Sheet Test Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "test profil": {
+      "main": [
+        [
+          {
+            "node": "Test Shopify",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Postgres_UPSERT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Location ID test": {
+      "main": [
+        [
+          {
+            "node": "Location ID ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Location ID ok?": {
+      "main": [
+        [
+          {
+            "node": "Test Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Shopify Test Failed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres_UPSERT": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Total Suksess?": {
+      "main": [
+        [
+          {
+            "node": "Perfekt full suksess melding",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delvis Suksess?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delvis Suksess?": {
+      "main": [
+        [
+          {
+            "node": "Delvis Suksess-melding",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Total feil melding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Call 'LAGERSYKRONISERING'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Kjør Første Sync?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'LAGERSYKRONISERING'": {
+      "main": [
+        [
+          {
+            "node": "Total Suksess?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "test profil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e419f62e-cf82-4e08-91c0-2241390d05ba",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d455e9dc64af83df6cf9e9ce94a211fb5530f762790d157d6d23731c419b46cf"
+  },
+  "id": "PhEILJMIPlrgZ1kS",
+  "tags": [
+    {
+      "updatedAt": "2025-12-06T23:26:45.309Z",
+      "createdAt": "2025-12-06T23:26:45.309Z",
+      "id": "SzN9clVOY3IOnAVU",
+      "name": "Lager"
+    }
+  ]
+}

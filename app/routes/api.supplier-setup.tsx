@@ -1,6 +1,11 @@
 
-import type { ActionFunctionArgs } from "@remix-run/node";
-import { json } from "@remix-run/node";
+import type { ActionFunctionArgs } from "@react-router/node";
+
+const json = (data: unknown, init: ResponseInit = {}) => {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "application/json");
+  return new Response(JSON.stringify(data), { ...init, headers });
+};
 
 const N8N_SUPPLIER_SETUP_URL = process.env.N8N_SUPPLIER_SETUP_URL;
 

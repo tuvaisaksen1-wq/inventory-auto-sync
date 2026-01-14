@@ -38,6 +38,53 @@ shopify app dev
 
 Press P to open the URL to your app. Once you click install, you can start development.
 
+## Inventory Sync Backend
+
+### Environment
+
+Copy `.env.example` and set the values:
+
+```shell
+cp .env.example .env
+```
+
+Required variables:
+- `SYNC_DATABASE_URL` (Postgres used by n8n, contains `supplier_profiles`, `sync_runs`, `latest_stock`)
+- `N8N_INVENTORY_SYNC_URL` (webhook URL for inventory sync)
+- `N8N_SUPPLIER_SETUP_URL` (webhook URL for supplier setup)
+
+### Start locally
+
+```shell
+npm run dev
+```
+
+### Test endpoints
+
+Manual sync trigger:
+
+```shell
+curl -X POST http://localhost:5173/start-sync \\
+  -H "Content-Type: application/json" \\
+  -d '{ "supplier_id": "brandstreettokyo" }'
+```
+
+Latest sync status:
+
+```shell
+curl "http://localhost:5173/sync-status?supplier_id=brandstreettokyo"
+```
+
+Latest products:
+
+```shell
+curl "http://localhost:5173/products/brandstreettokyo"
+```
+
+Notes:
+- `supplier_id` must exist in `supplier_profiles`.
+- The UI currently derives `supplier_id` from the supplier name (lowercase slug).
+
 Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your partners account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.
 
 ### Authenticating and querying data

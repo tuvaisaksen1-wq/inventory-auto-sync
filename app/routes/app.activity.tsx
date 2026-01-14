@@ -1,3 +1,4 @@
-import ActivityLog from "../Pages/ActivityLog";
-
-export default ActivityLog;
+import ActivityLog from "../base44/ActivityLog";
+export default function Route() {
+  return <ActivityLog />;
+}

@@ -1,3 +1,5 @@
-import Settings from "../Pages/Settings";
+import Settings from "../base44/Settings";
 
-export default Settings;
+export default function Route() {
+  return <Settings />;
+}

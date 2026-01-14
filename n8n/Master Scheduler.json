@@ -1,0 +1,387 @@
+{
+  "name": "Master Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT supplier_id, name, status, connection_type, connection, matching_key, shop, frequency\nFROM supplier_profiles\nWHERE status = 'active';",
+        "options": {}
+      },
+      "name": "Get Active Suppliers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        304,
+        864
+      ],
+      "id": "a232e1dd-44f7-4d0d-8e76-4b18537f6aba",
+      "credentials": {
+        "postgres": {
+          "id": "6DTyHbqQ0e7dtEQI",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Split in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        704,
+        864
+      ],
+      "id": "66c53620-dba8-4ea5-8909-512aa4d66995"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ ($json.profile.connection?.type || $json.profile.connection_type || '').toLowerCase().trim() }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "{{ ($json.profile.connection?.type || $json.profile.connection_type || '').toLowerCase().trim() }}",
+              "output": {}
+            },
+            {
+              "value2": "google_sheet"
+            },
+            {
+              "value2": "{{ ($json.profile.connection?.type || $json.profile.connection_type || '').toLowerCase().trim() }}"
+            },
+            {
+              "value2": "url"
+            }
+          ]
+        }
+      },
+      "name": "Route by Connection Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        832
+      ],
+      "id": "368456f6-e6df-4786-92e9-66b77c01bdc5"
+    },
+    {
+      "parameters": {
+        "content": "1. Schedule Trigger\n\nHva gjør den?\nStarter hele workflowen automatisk på et intervall (f.eks. hver time).\n\nHvorfor?\nFor at synkronisering skal gå uten at du trenger å gjøre noe manuelt.",
+        "height": 272,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        576
+      ],
+      "id": "341ba9f8-b26a-41a6-a695-534e19ba4ecd",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "2. Get Active Suppliers (Postgres)\n\nHva gjør den?\nHenter alle leverandører fra databasen som har status = “active”.\n\nHvorfor?\nBare aktive leverandører skal synkes.",
+        "height": 256,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        592
+      ],
+      "id": "51ef82d7-3d38-467c-8cc4-d427b104035b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "3. Split in Batches (1 per batch)\n\nHva gjør den?\nSender videre én leverandør om gangen.\n\nHvorfor?\nFor å unngå kaos, feil, rate limits og overlapping.",
+        "height": 240,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        672,
+        608
+      ],
+      "id": "267baa3f-76b4-43c5-aab1-59eff15df719",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "5. Route by Connection Type (Switch)\n\nHva gjør den?\nSjekker leverandørens connection_type og sender den videre til:\n\nGoogle Sheet Runner\n\nURL Runner\n\nAPI Runner\n\nCSV Runner\n\nHvorfor?\nHver leverandør får riktig datapipeline.CSV, etc.",
+        "height": 416,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        400
+      ],
+      "id": "52c7c107-1243-456d-b3a9-17a8ae1f16ab",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "6. Call “Baseline” (Execute Workflow)\n\nHva gjør den?\nStarter riktig under-workflow for å hente og prosessere lagerdata.\n\nHvorfor?\nDette er selve jobben: hente data → oppdatere Shopify.",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        416
+      ],
+      "id": "2b9adda7-8c3f-4972-a80d-d3dd35d55abf",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        32,
+        864
+      ],
+      "id": "db0d0cb9-0901-46fd-92e3-48e830665030",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "content": "4. Wrap Profile (Code node)\n\nHva gjør den?\nNormaliserer strukturen på leverandør-profilen:\n\nconnection.type blir standardisert\n\nsheet_id / tab / kolonner blir ryddet\n\nshop-felter blir samlet\n\nmatching_key blir alltid tilgjengelig\n\nHvorfor?\nDette gir samme format totalt uansett kilde →\nalle dine runner-workflows fungerer uten spesialtilpasning.",
+        "height": 432
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        416
+      ],
+      "id": "6a29daa1-4012-44d7-9b7c-9a97e330fb3d",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const it of $input.all()) {\n  const row = it.json || {};\n\n  // Start med en kopi\n  const p = { ...row };\n\n  // Sørg for at connection-objektet finnes\n  p.connection = p.connection || {};\n\n  // 1) Normaliser connection.type\n  //    Prioritet: connection.type -> connection_type -> ''\n  p.connection.type = (p.connection.type || p.connection_type || '').toLowerCase().trim();\n\n  // 2) Normaliser sheet/tab-felt\n  //    Støtt både 'tab' og 'tabs.source'\n  const tabs = p.connection.tabs || {};\n  p.connection.sheet_id = p.connection.sheet_id || p.sheet_id || '';\n  p.connection.tab = p.connection.tab || tabs.source || '';\n\n  // 3) Normaliser kolonnevalg for nøkkel og lager\n  //    Støtt både tabs.match/qty og eldre 'matching_key'\n  tabs.match = tabs.match || p.matching_key || 'sku';\n  tabs.qty   = tabs.qty   || p.qty_col || 'stock';\n  p.connection.tabs = tabs;\n\n  // 4) Behold matching_key også på rot for enkel tilgang (frivillig)\n  p.matching_key = p.matching_key || tabs.match;\n\n  // 5) Shop-normalisering (domain/cred_name m.m. hvis de finnes i ulike felt)\n  p.shop = p.shop || {};\n  p.shop.domain    = p.shop.domain    || p.domain || '';\n  p.shop.platform  = p.shop.platform  || p.platform || 'shopify';\n  p.shop.cred_name = p.shop.cred_name || p.shop_cred || '';\n\n  out.push({ json: { profile: p, payload: {} } });\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        864
+      ],
+      "id": "59f543af-c96e-49a9-8b67-38d47cc5e0b8",
+      "name": "Wrap Profile"
+    },
+    {
+      "parameters": {
+        "content": "✅ MASTER SCHEDULER — komplett, enkel forklaring\n\n(Dette er “hjernen” som styrer hele lageroppdateringen.\n\nMål med workflowen:\n\nFinne hvilke leverandører som skal synkroniseres nå\n\nKjøre riktig “runner” (Google Sheet, URL, API osv.)\n\nSende én leverandør av gangen videre\n\nGi konsistente data til alle under-workflows",
+        "height": 384
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        16
+      ],
+      "id": "8be3a4c9-bb52-410d-bc1e-cc9ddfe14ce5",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "UnVo3KxYhohVgL27",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/UnVo3KxYhohVgL27",
+          "cachedResultName": "Baseline"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1440,
+        656
+      ],
+      "id": "7f3e0993-ecd9-4ad1-b7e1-516f79642b4a",
+      "name": "Call 'Baseline'"
+    },
+    {
+      "parameters": {
+        "content": "WORKFLOWEN MÅ VÆRE AKTIV FOR AT DEN SKAL GÅ AUTOMATISK!!!",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        432
+      ],
+      "id": "6044b4c7-b5bb-4c8f-bcb2-7d01e4730f03",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "SPØRSMÅL \nhva om jeg har mange leverandører, må kundene vente til vær leverandør er ferdig\n\nEr førstegangsleveranørerer med på dette\n\nHva med de som skal ha real time synkronisering",
+        "height": 240
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        240
+      ],
+      "id": "d9bac5f6-7726-4263-a293-abc7758b6de4",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [],
+          "number": [],
+          "string": [
+            {
+              "value1": "={{ new Date($json.profile.next_run_at).getTime() <= new Date().getTime() }}",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "name": "Check Frequency",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        512,
+        864
+      ],
+      "id": "bf58142f-6326-4169-b27c-30c98bff1f54"
+    },
+    {
+      "parameters": {
+        "content": "Styrer når leverandøren skal kjøre neste gang.",
+        "height": 80,
+        "width": 176
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        752
+      ],
+      "id": "e34ddc64-feca-47a8-b462-436b6c29ad2e",
+      "name": "Sticky Note9"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Active Suppliers": {
+      "main": [
+        [
+          {
+            "node": "Check Frequency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split in Batches": {
+      "main": [
+        [
+          {
+            "node": "Wrap Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Connection Type": {
+      "main": [
+        [
+          {
+            "node": "Call 'Baseline'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Active Suppliers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Profile": {
+      "main": [
+        [
+          {
+            "node": "Route by Connection Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Frequency": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "bdbe78e8-695f-4315-b219-b1fc5b32fd3b",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d455e9dc64af83df6cf9e9ce94a211fb5530f762790d157d6d23731c419b46cf"
+  },
+  "id": "h3nz5FQjgtnYV4Nr",
+  "tags": [
+    {
+      "updatedAt": "2025-12-06T23:26:45.309Z",
+      "createdAt": "2025-12-06T23:26:45.309Z",
+      "id": "SzN9clVOY3IOnAVU",
+      "name": "Lager"
+    }
+  ]
+}

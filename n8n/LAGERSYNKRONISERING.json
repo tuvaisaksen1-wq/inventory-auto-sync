@@ -1,0 +1,2325 @@
+{
+  "name": "LAGERSYNKRONISERING",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('test').item.json.profile.connection.sheet_url }}",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('test').item.json.profile.connection.sheet_name }}",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "name": "Hent fra Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        -2112,
+        832
+      ],
+      "id": "97d7c2a0-79e9-4f41-931d-ed395a7ce601",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WaFwzjQ1tlaQmGgT",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "📥 Leser hele arket fra valgt fane for fleksibel kolonnevalg"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -4464,
+        848
+      ],
+      "id": "89e1efc1-db87-4cdd-a7f7-c5e6cd20c101",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "functionCode": "// --- Hent profil ---\nconst trig = $items(\"When Executed by Another Workflow\", 0, 0)?.[0]?.json ?? {};\nconst profile = trig.profile ?? trig;\nconst tabs = profile.connection?.tabs ?? {};\nconst headerRow = Number.isFinite(tabs.headerRow) ? Number(tabs.headerRow) : 1;\n\n// --- Input fra Google Sheets-noden ---\n// For enkelhet antar vi at hver rad kommer som ett item med et objekt (nøkkel=kolonnenavn hvis node’n gjør header-løft).\n// Hvis du får rene arrays, kan vi håndtere det også (se lenger ned).\nconst items = $input.all();\n\n// Verktøy: trim og normaliser header\nfunction norm(s){ return String(s ?? '').trim(); }\nfunction isColLetter(s){ return /^[A-Za-z]$/.test(String(s)); }\nfunction colLetterToIndex(letter){ return letter.toUpperCase().charCodeAt(0) - 65; } // A=0,B=1,…\n\n// --- Finn mapping ---\n// 1) Hvis du har kolonnenavn (tabs.match / tabs.qty), bruk dem.\n// 2) Hvis du har kolonnebokstaver (tabs.match_col / tabs.qty_col), bruk posisjoner.\n// 3) Hvis ingenting spesifisert, prøv å autodetektere med enkle heuristikker (\"sku\", \"ean\", \"id\", \"stock\", \"qty\").\n\nlet keyRef = tabs.match;\nlet qtyRef = tabs.qty;\nlet keyCol = tabs.match_col;\nlet qtyCol = tabs.qty_col;\n\n// Heuristikk hvis ikke angitt:\nif (!keyRef && !keyCol) keyRef = 'sku';\nif (!qtyRef && !qtyCol) qtyRef = 'stock';\n\n// --- Les header hvis vi må (hvis input er arrays eller vi skal bruke bokstaver) ---\nlet header = null;\nlet rowsNormalized = [];\n\n// Case A: Items allerede som objekter (vanlig når Sheets-noden bruker header)\nconst looksLikeObjects = items.length && typeof items[0].json === 'object' && !Array.isArray(items[0].json);\n\n// Hvis vi må bruke bokstaver, eller vi vil verifisere header, bygg header fra første rad om mulig\nif (!looksLikeObjects) {\n  // Hvis du i stedet får arrays: bygg header fra headerRow\n  // Forvent at Google Sheets-noden returnerer noe som ligner { values: [...] } eller rader som arrays;\n  // Tilpass dette til din faktiske struktur hvis nødvendig.\n  throw new Error('Forventet objekt-rader fra Sheets-noden. Sett noden til å bruke header-row eller map før.');\n}\n\n// Normaliser objekter og lag “header”-liste for evt. bokstavoppslag\n// (Her antar vi at keys i json ER kolonnenavn hentet fra header-row)\nheader = Object.keys(items[0].json).map(norm);\n\n// Funksjon for å hente feltverdi enten med kolonnenavn eller bokstav\nfunction getVal(rowJson, refName, refCol) {\n  // 1) navne-referanse\n  if (refName) {\n    // prøv eksakt, lower og upper\n    const direct = rowJson[refName];\n    if (direct !== undefined) return direct;\n    const lowerKey = Object.keys(rowJson).find(k => k.toLowerCase() === String(refName).toLowerCase());\n    if (lowerKey) return rowJson[lowerKey];\n  }\n  // 2) bokstav-referanse\n  if (refCol && isColLetter(refCol)) {\n    const idx = colLetterToIndex(refCol);\n    const keys = Object.keys(rowJson);\n    if (idx >= 0 && idx < keys.length) return rowJson[keys[idx]];\n  }\n  return undefined;\n}\n\n// Autodetect hvis fortsatt mangler (enkel heuristikk)\nfunction autoDetectKey(rowJson) {\n  const keys = Object.keys(rowJson);\n  const hit = keys.find(k => /^(sku|ean|barcode|id)$/i.test(k.trim()));\n  return hit ? { refName: hit } : null;\n}\nfunction autoDetectQty(rowJson) {\n  const keys = Object.keys(rowJson);\n  const hit = keys.find(k => /^(stock|qty|quantity|lager)$/i.test(k.trim()));\n  return hit ? { refName: hit } : null;\n}\nif (!keyRef && !keyCol) {\n  const guess = autoDetectKey(items[0].json);\n  if (guess) keyRef = guess.refName;\n}\nif (!qtyRef && !qtyCol) {\n  const guess = autoDetectQty(items[0].json);\n  if (guess) qtyRef = guess.refName;\n}\n\n// --- Map alle rader til standard format ---\nconst out = [];\nfor (const { json: r } of items) {\n  const keyVal = getVal(r, keyRef, keyCol);\n  const qtyVal = getVal(r, qtyRef, qtyCol);\n  if (keyVal == null || String(keyVal).trim() === '') continue;\n\n  const qtyNum = Number(qtyVal);\n  out.push({\n    json: {\n      profile,\n      matching_key: String(keyVal).trim(),\n      qty: Number.isFinite(qtyNum) ? qtyNum : 0,\n      raw: r\n    }\n  });\n}\n\nreturn out;\n"
+      },
+      "name": "Strukturerer",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1824,
+        832
+      ],
+      "id": "dbd61880-bdbe-4216-b3fd-c6b68ce2728c",
+      "notes": "🔧 Leser dynamisk fra kolonnene valgt av kunden (f.eks. C og F)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const profile = {\n  customer_id: \"demo_customer_1\",\n  supplier_id: \"brandstreettokyo\",\n  name: \"Brand Street Tokyo\",\n  status: \"active\",\n\n  connection_type: \"google_sheet\",\n  matching_key: \"sku\",\n  matching_key_type: \"sku\",\n\n  connection: {\n    type: \"google_sheet\",\n    sheet_url: \"https://docs.google.com/spreadsheets/d/1CdAR76Xc0fWf1txFH7lxxd6Pprz6I_3iVA2nSZN0A_E/edit?usp=sharing\",\n    sheet_name: \"test\",\n\n    tabs: {\n      source: \"test\",\n      header_row: 1,\n      supplier_key_column: \"sku\",\n      qty_column: \"stock\"\n    }\n  },\n\n  shop: {\n    domain: \"testbutik679865.myshopify.com\",\n    platform: \"shopify\",\n    access_token: \"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\",\n    location_id: \"111849308341\"\n  },\n\n  frequency: \"6h\",\n\n  notifications: {\n    mode: \"critical_only\",\n    email: \"tuvaisaksen1@gmail.com\",\n    sms: [],\n    slack: []\n  }\n};\n\nreturn [{ json: { profile } }];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3552,
+        752
+      ],
+      "id": "48fae98e-915f-4e6c-9046-1ec06fdece90",
+      "name": "test"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $items(\"test\", 0, 0)[0].json.profile;\nreturn $input.all().map(i => ({ json: { ...i.json, profile: p } }));\n\n\n"
+      },
+      "id": "f067b885-b3a2-4865-a790-6af52139cbe8",
+      "name": "Attach Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{$json.profile.shop.domain}}/admin/api/2023-10/graphql.json\n",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $json.profile.shop.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{\nJSON.stringify({\n  query: `\n    query($q: String!) {\n      productVariants(first: 1, query: $q) {\n        edges { node { id sku inventoryItem { id } } }\n      }\n    }`,\n  variables: { q: \"sku:\" + String($json.matching_key || \"\").trim() }\n})\n}}",
+        "options": {}
+      },
+      "id": "6bbbd026-fb15-4f41-b3c6-4b37b806aa7a",
+      "name": "Lookup variant by SKU",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        192,
+        1568
+      ],
+      "headers": [
+        {
+          "name": "X-Shopify-Access-Token",
+          "value": "={{$json.profile.shop.access_token}}"
+        }
+      ],
+      "retryOnFail": false,
+      "executeOnce": false,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i => {\n  const edge = i.json.data?.productVariants?.edges?.[0]?.node;\n  const gid = edge?.inventoryItem?.id || null;             // f.eks. \"gid://shopify/InventoryItem/54119086031029\"\n  const numericId = gid ? gid.split('/').pop() : null;      // \"54119086031029\"\n  return { json: { ...i.json, inventory_item_id: numericId } };\n});\n\n\n"
+      },
+      "id": "fbdf0d24-011e-445b-8f57-1940582fc803",
+      "name": "Pick inventory_item_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ !!$json.inventory_item_id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "ee982f75-4373-4608-adf0-b50ed8ee9d6d",
+      "name": "Has inventory_item_id?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        768,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({\n  json: {\n    status: \"NOT_FOUND\",\n    matching_key_type: item.json.profile.matching_key_type,\n    matching_key_value: item.json.matching_key,\n    message: `Fant ikke produkt i Shopify som matcher ${item.json.profile.matching_key_type}: ${item.json.matching_key}`\n  }\n}));"
+      },
+      "id": "7fc76238-efc3-46ca-af6e-631328ed94f9",
+      "name": "Mark not-found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        2192
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "12513c87-98eb-4107-bc9b-99fa3cf8adcf",
+      "name": "Merge results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const all = $input.all();\nreturn all.length ? [all[0]] : [];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1552,
+        560
+      ],
+      "id": "40d9f9a9-19a2-429c-99a1-69c5f871006e",
+      "name": "Take One"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS(\n  SELECT 1 FROM public.stock_snapshots\n  WHERE supplier_id = '{{ $json.profile.supplier_id }}'\n) AS has_prev;",
+        "additionalFields": {}
+      },
+      "id": "c0243836-7376-4bbc-aad6-de6bc9866894",
+      "name": "Has Snapshot?1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "id": "2dd03475-9d1e-4fa3-9f3d-eeb005cf2770",
+      "name": "Merge (Choose Input 1)1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $items(\"Has Snapshot?1\", 0, 0)[0].json.has_prev ? 'yes' : 'no' }}",
+              "value2": "yes"
+            }
+          ]
+        }
+      },
+      "id": "72772d9c-0a1b-43e3-a877-c2fcd386a899",
+      "name": "First Run? (has_prev)1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "47HPkTsTLLec2jYX",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/47HPkTsTLLec2jYX",
+          "cachedResultName": "Sammenlign lagerstatus"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        48
+      ],
+      "id": "072e97cf-cfed-47f5-8ff6-bd30359088ff",
+      "name": "Sammenlign lagerstatus"
+    },
+    {
+      "parameters": {
+        "content": "Capture status1: Logger om oppdateringen gikk bra (Success/Error).",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2096,
+        1184
+      ],
+      "id": "8900c147-3170-4f40-b463-93f3c7e604ae",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://testbutik679865.myshopify.com/admin/api/2024-10/inventory_levels/set.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Shopify-Access-Token",
+              "value": "={{ $('Attach Profile').item.json.profile.shop.access_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"location_id\": {{ $('Attach Profile').item.json.profile.shop.location_id }},\n  \"inventory_item_id\": {{$json.inventory_item_id.split('/').pop()}},\n  \"available\": {{ $('Strukturerer').item.json.qty }}\n}\n",
+        "options": {}
+      },
+      "id": "bd196337-35e1-4ac0-96f0-794cfe4c2332",
+      "name": "Oppdaterer shopify inventory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1408,
+        1280
+      ],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "X-Shopify-Access-Token",
+          "value": "={{$json.profile.shop.access_token}}"
+        }
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Steg for steg, i vanlig språk\n$input.all()\n\n\n= henter alle varer som kom inn i Mark not-found\n(altså: alle SKU-ene som ikke ble funnet i Shopify)\n\n.map(item => ({ ... }))\n\n\n= går gjennom dem én og én\nog lager et nytt, forenklet objekt per vare\n\nstatus: \"NOT_FOUND\"\n\n\n= merker varen tydelig som feil / ikke funnet\n\nmatching_key_type\n\n\n= sier hva slags nøkkel kunden har valgt\n(f.eks. SKU, product_id, EAN)\n\nmatching_key_value\n\n\n= sier hvilken verdi som feilet\n(f.eks. SKU = ABC-123)\n\nmessage\n\n\n= ferdig menneskelig forklaring, klar til e-post eller rapport:\n\n“Fant ikke produkt i Shopify som matcher SKU: ABC-123”",
+        "height": 784
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        848,
+        2400
+      ],
+      "id": "45a44302-631d-4f7f-9c19-6ea8ef395ee8",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "httpStatus",
+              "value": "={{$json.statusCode || $json.response?.statusCode || ''}}"
+            },
+            {
+              "name": "httpError",
+              "value": "={{$json.error?.message || ''}}"
+            },
+            {
+              "name": "supplier_id",
+              "value": "={{$json.profile.supplier_id}}"
+            },
+            {
+              "name": "matching_key",
+              "value": "={{$json.profile.matching_key}}"
+            },
+            {
+              "name": "qty",
+              "value": "={{$json.qty}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d870aa5a-775a-49f4-9d1c-9ed7564badbc",
+      "name": "Capture status1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into latest_stock (\n  tenant_id,\n  supplier_id,\n  matching_key,\n  qty,\n  updated_at\n)\nvalues ($1, $2, $3, $4, now())\non conflict (tenant_id, supplier_id, matching_key)\ndo update set\n  qty = excluded.qty,\n  updated_at = now();\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2800,
+        1296
+      ],
+      "id": "a6fb8837-76a0-4b51-819f-9d1a05e3ef23",
+      "name": "Write Snapshot (ALL)1",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.latest_stock (supplier_id, matching_key, qty, updated_at)\nVALUES ($1, $2, $3, now())\nON CONFLICT (supplier_id, matching_key)\nDO UPDATE SET qty = EXCLUDED.qty, updated_at = now();",
+        "options": {
+          "queryBatching": "single",
+          "queryReplacement": "={{$json.supplier_id ?? $json.profile?.supplier_id}}\n\n{{$json.matching_key ?? $json.raw?.sku}}\n\n{{ Number($json.qty ?? $json.available ?? 0) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2736,
+        736
+      ],
+      "id": "d5aa0bfe-deb5-4020-8ef0-e0d6b6887bfb",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d070c58a-d47b-4ce2-a5b2-650bcaed952e",
+              "leftValue": "={{$json.supplier_id || $json.profile?.supplier_id}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "0d5b3889-6661-4944-866f-75123f1c34ce",
+              "leftValue": "={{$json.matching_key || $json.raw?.sku}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "116c530f-2acf-4742-96fa-ef725aad6843",
+              "leftValue": "={{ $json.qty ?? $json.available }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2256,
+        1584
+      ],
+      "id": "accdb51c-94cc-4c08-9ccf-2fccf50c16e6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "matching_key",
+              "field2": "matching_key"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "752f3ce8-d80c-443d-b719-a7812051cafe",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        480,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = items.map(item => {\n  const qtyNå = item.json.qty_nå;\n  const qtyFør = item.json.qty_før;\n\n  if (qtyNå !== qtyFør) {\n    return {\n      json: {\n        matching_key: item.json.matching_key,\n        qty_før: qtyFør,\n        qty_nå: qtyNå,\n        qty_diff: qtyNå - qtyFør\n      }\n    };\n  }\n\n  return null; // Hvis ingen endring\n});\n\nreturn result.filter(item => item !== null);\n"
+      },
+      "id": "90e430fd-a16d-4cf5-9581-19960728cba7",
+      "name": "Sammenlign og Filtrer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        800,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "id": "a24766ab-fbab-42d9-b7d4-fede7ef1af19",
+      "name": "Legg til Timestamp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "🔹 Hva du må bygge på etter hvert\nTrinn\tHva du må legge til\tMål\n1\tHent ekte data fra Postgres og leverandør-API / Google Sheet\tFå sanntidslager\n2\tLegg inn cron-trigger (kjør hver 30 min)\tAutomatisk kjøring\n3\tLagre resultater i stock_snapshots-tabell\tHistorikk\n4\tSend endringer videre til Shopify-oppdatering-workflow\tOppdatere butikk\n5\tKoble mot kundens profil (supplier_id, token, domene)\tMulti-kunde støtte\n6\tLegg på notifikasjoner (e-post / Slack)\tStatus og feilmeldinger",
+        "height": 400
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2304,
+        2688
+      ],
+      "id": "5ba71554-e811-4f68-9003-1a55e01cf726",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ToFU1oU1epJNxA6d",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/ToFU1oU1epJNxA6d",
+          "cachedResultName": "Oppdater Shopify Lagerstatus"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1536,
+        64
+      ],
+      "id": "8ddd8af9-1e60-492e-8112-ab23e1687596",
+      "name": "Call 'Oppdater Shopify Lagerstatus'"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  matching_key,              -- evt: sku AS matching_key\n  qty AS qty_før\nFROM latest_stock            -- eller stock_snapshots\nWHERE tenant_id   = {{ $json.profile.tenant_id }}\n  AND supplier_id = {{ $json.profile.supplier_id }}\n  AND matching_key IN {{ $json._keys_sql }};\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        144,
+        48
+      ],
+      "id": "596eee30-e231-45d5-a4ab-3fe66adf70a5",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "🎯 Hovedmål med workflowen\n\nHente lagerdata fra leverandørens kilde (Google Sheet / API / URL / CSV)\n\nFinne matchende produkter i Shopify\n\nOppdatere riktig location og beholdning\n\nLogge alle endringer og feil",
+        "height": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1904,
+        -384
+      ],
+      "id": "c52c2976-97a5-4616-95b8-19c5ae23171e",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "1️⃣ Input (Execute workflow trigger)\n\nHva gjør den?\nTar imot én leverandør-profil fra Master Scheduler.\n\nHvorfor?\nGir all konfig du trenger: connection type, location, matching key, sheet/tab osv.",
+        "height": 240
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -4528,
+        560
+      ],
+      "id": "ba84e8b4-6e42-4135-a836-cef5da55afed",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "content": "Henter nyeste leverandørens sanne beholdning fra Google Sheet: Kobler seg til Google Sheets basert på URL-en og navnet. \n\nconnection_type:\n\nGoogle Sheet\n\nAPI\n\nCSV\n\nURL feed\n\nHvorfor?\nFor å lese leverandørens sanne beholdning.",
+        "height": 384
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2160,
+        432
+      ],
+      "id": "3f118893-e43b-4905-bb24-76d4877aaed1",
+      "name": "Sticky Note14"
+    },
+    {
+      "parameters": {
+        "content": "test: En manuell trigger med hardkodet data. Denne brukes kun når du tester workflowen manuelt (\"Debug\"), ",
+        "height": 96
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3616,
+        608
+      ],
+      "id": "b205e584-cdff-4ca3-9065-3ea580b4878b",
+      "name": "Sticky Note15"
+    },
+    {
+      "parameters": {
+        "content": "Strukturerer (Function Node): Dette er \"hjernen\" i datavasken.\n\nHvorfor: Google Sheets kan ha SKU i kolonne A eller C, og antall i B eller F.\n\nHva den gjør: Den bruker innstillingene fra profilen til å mappe rotete data om til et standard format: { matching_key: 'SKU123', qty: 50 }.",
+        "height": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1888,
+        528
+      ],
+      "id": "ed163245-a174-4007-b22b-892ae852d095",
+      "name": "Sticky Note16"
+    },
+    {
+      "parameters": {
+        "content": "Take One: Tar kun det første elementet for å gjøre en sjekk mot databasen (vi trenger ikke sjekke database-status for alle 1000 produkter, ett er nok for å se om leverandøren eksisterer",
+        "height": 144
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1632,
+        400
+      ],
+      "id": "a10bba6e-c65a-41f4-a415-87eccf44f258",
+      "name": "Sticky Note17"
+    },
+    {
+      "parameters": {
+        "content": "Has Snapshot?1 (Postgres): Spør databasen: \"Har vi lagret data for denne leverandøren før?\"",
+        "height": 96
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1376,
+        448
+      ],
+      "id": "748116d6-581c-4a0a-a043-37e1398b12d9",
+      "name": "Sticky Note18"
+    },
+    {
+      "parameters": {
+        "content": " Merge (Choose Input 1)1: Setter sammen resultatet fra databasesjekken med den opprinnelige datastrømmen.",
+        "height": 96
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        720
+      ],
+      "id": "ad81177a-2262-4534-8b00-205a52475386",
+      "name": "Sticky Note19"
+    },
+    {
+      "parameters": {
+        "content": "First Run? (If Node): Her deler workflowen seg i to veier:\n\nTRUE (Yes): Vi har data fra før → Gå til Delta Sync (Vei B).\n\nFALSE (No): Dette er første gang → Gå til Full Sync (Vei A).",
+        "height": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        640
+      ],
+      "id": "86d7deae-a313-4f85-9f55-353c43ef1107",
+      "name": "Sticky Note20"
+    },
+    {
+      "parameters": {
+        "content": "Attach Profile: Sørger for at leverandør-profilen følger med hvert enkelt produkt videre i flyten.",
+        "height": 96
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        1424
+      ],
+      "id": "362ba787-4e02-4275-b75c-eb9f506a8ee9",
+      "name": "Sticky Note21"
+    },
+    {
+      "parameters": {
+        "content": "Lookup variant by SKU (Shopify GraphQL):\n\nHva: Sender en spørring til Shopify for hver SKU: \"Hei, hva er inventory_item_id for SKU 'ABC'?\"\n\nHvorfor: Shopify trenger en intern ID (f.eks. 541190...) for å oppdatere lager, de godtar ikke bare SKU.",
+        "height": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        1296
+      ],
+      "id": "1645edea-a4f4-4fce-84c4-c9682755925d",
+      "name": "Sticky Note22"
+    },
+    {
+      "parameters": {
+        "content": "Pick inventory_item_id: Henter ut selve ID-en fra svaret til Shopify og legger den ryddig på objektet.",
+        "height": 96
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        448,
+        1456
+      ],
+      "id": "14d996bc-383c-45a6-a946-9f9df8568171",
+      "name": "Sticky Note23"
+    },
+    {
+      "parameters": {
+        "content": "Has inventory_item_id? (If Node): Sjekker om produktet faktisk ble funnet i Shopify.\n\nHvis funnet: Gå videre til oppdatering.\n\nHvis ikke funnet: Går til \"Mark not-found\" (for rapportering).",
+        "height": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1088
+      ],
+      "id": "f96f14c1-c41b-454a-8fae-61ac0fa11e96",
+      "name": "Sticky Note24"
+    },
+    {
+      "parameters": {
+        "content": "Oppdaterer shopify inventory (HTTP Request): Sender den faktiske oppdateringen til Shopify: \"Sett lagerbeholdning for ID xxx til 50 stk på Location yyy\"",
+        "height": 128
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        1136
+      ],
+      "id": "0c69d8c6-1549-45d7-a3f1-df514fa93374",
+      "name": "Sticky Note25"
+    },
+    {
+      "parameters": {
+        "content": "Write Snapshot (ALL)1 (Postgres): Lagrer alle dataene i stock_snapshots-tabellen. Dette danner grunnlaget for \"historikk\" ved neste kjørin",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2752,
+        1136
+      ],
+      "id": "97d3709b-6bf4-49db-ab06-e91544dd4801",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "Execute a SQL query (Upsert latest_stock): Oppdaterer en \"nå-situasjon\"-tabell. Slik at du alltid har en tabell som viser dagens lagerstatus raskt.",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        592
+      ],
+      "id": "243bbc45-d213-4e94-b8a4-b92d0a1018b2",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "content": "Sammenlign lagerstatus (Execute Workflow): Merk: Denne noden ser ut til å kalle en annen workflow først (kanskje for å forberede noe), men selve logikken fortsetter i denne workflowen etterpå."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -128
+      ],
+      "id": "ddfb188a-eda7-4d38-a4c7-22d425b9a130",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "content": "Execute a SQL query1 (Postgres): Henter forrige kjente lagerstatus fra databasen for disse produktene.",
+        "height": 96
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -64
+      ],
+      "id": "62eb34d5-8802-4c93-8a4a-4b43d29bbd18",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "Merge: Her skjer magien. Den tar Dagens liste (fra Google Sheet) og parrer den med Gårsdagens liste (fra Postgres) basert på SKU.",
+        "height": 112
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -64
+      ],
+      "id": "73e04cc2-798b-4795-a724-1befd49622b1",
+      "name": "Sticky Note26"
+    },
+    {
+      "parameters": {
+        "content": "Sammenlign og Filtrer (Code Node):\n\nLogikk: if (qty_nå !== qty_før) { behold produkt } else { kast produkt }.\n\nResultat: Vi sitter igjen med en mye kortere liste som kun inneholder produkter der lageret faktisk har endret seg.",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -176
+      ],
+      "id": "2bbea785-1f08-4cd2-b7f7-a8bd2c62f21b",
+      "name": "Sticky Note27"
+    },
+    {
+      "parameters": {
+        "content": "Legg til Timestamp: Setter et tidspunkt for endringen.",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        -48
+      ],
+      "id": "b1f87ae7-9792-4242-8799-1dee934ee119",
+      "name": "Sticky Note28"
+    },
+    {
+      "parameters": {
+        "content": "Call 'Oppdater Shopify Lagerstatus': Sender den filtrerte listen (bare endringer) til en dedikert workflow som tar seg av selve Shopify-oppdateringen.",
+        "height": 128
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        -96
+      ],
+      "id": "ee470f00-1793-472c-a616-30904c1dae49",
+      "name": "Sticky Note29"
+    },
+    {
+      "parameters": {
+        "content": "8. Funker snapshotene både på de som kjører workflow fast eller for de som det er først gangen til?\nSvar: Ja, de fungerer for begge.\n\nKontinuerlig/Fast kjøring: Systemet bruker det siste lagrede snapshotet i databasen for å sammenligne mot den nye dataen.\n\nFørste gangen: For en vare som aldri har blitt synkronisert før, vil databasen ikke returnere noe snapshot-data (eller det returnerer 0). Sammenlign lagerstatus-noden vil da se en forskjell mellom leverandørens nye status og den \"ukjente/tomme\" gamle statusen, og derfor sende oppdateringen til Shopify.",
+        "height": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2096,
+        656
+      ],
+      "id": "e15092bb-68f4-4aed-8f00-1949d63360df",
+      "name": "Sticky Note31"
+    },
+    {
+      "parameters": {
+        "content": "7. Funker det for de som har allerede en leverandør som kjører kontinuerlig igjennom workflowen...?\nSvar: Ja, dette er selve funksjonen til sammenligningssteget.\n\nHensikten med noden Sammenlign lagerstatus (og eventuelt tilhørende databasekall Execute a SQL query1) er å:\n\nHente inn den sist kjente lagerstatusen (snapshot).\n\nSammenligne denne med den nye dataen fra leverandøren.\n\nFiltrere slik at kun de varene hvor statusen faktisk har endret seg, blir sendt videre til Call 'Oppdater Shopify Lagerstatus'.\n\nDette reduserer API-bruken og er derfor den mest effektive måten å håndtere kontinuerlig sync på.",
+        "height": 608
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        528,
+        -816
+      ],
+      "id": "4f2964f8-b61e-4c10-9aa3-347159d4c54a",
+      "name": "Sticky Note32"
+    },
+    {
+      "parameters": {
+        "content": "6. Hva om lager ikke har antall men bare på og av på lager?\nSvar: Bruk en datatransformasjons-node til å mappe til tall.\n\nDette er et vanlig problem som løses ved å standardisere dataen i et tidlig steg i sync-flowen (etter henting, før sammenligning).\n\nMapping:\n\nPÅ LAGER / TRUE / IN_STOCK konverteres til et høyt antall (f.eks. 999) for å indikere \"alltid på lager/ubegrenset\".\n\nIKKE PÅ LAGER / FALSE / OUT_OF_STOCK konverteres til 0.\n\nDette sikrer at Shopify alltid mottar en numerisk verdi, slik API-et forventer.",
+        "height": 304,
+        "width": 832
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2304,
+        128
+      ],
+      "id": "7c92a34f-d688-40a7-8f59-8e1e059a409d",
+      "name": "Sticky Note33"
+    },
+    {
+      "parameters": {
+        "content": "Postgres_UPSERT i LAGERSYKRONISERING\nFormål: Lagre Lager-snapshot / Historikk\nHva den gjør: Den oppretter en helt ny eller oppdaterer en rad som lagrer lagerstatusen til hver enkelt vare for sammenligning i neste kjøring. Dette er nødvendig for snapshot-logikken.\n\nMålgruppe/Tabell: inventory_snapshots eller product_inventory (eller lignende).\n\nData som lagres:\n\nsupplier_id\n\nsku eller variant_id (Nøkkel)\n\ncurrent_inventory_count (Det nye antallet)\n\ntimestamp (Når dette ble registrert)\n\nDenne UPSERT-en er nødvendig for å oppdatere sammenligningsgrunnlaget etter at en vellykket synkronisering har skjedd og før arbeidsflyten avsluttes. Den lagrer resultatet av synkroniseringen.",
+        "height": 368,
+        "width": 800
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        1520
+      ],
+      "id": "b0d7696d-f49e-447b-af2a-7b5fa9edc4dd",
+      "name": "Sticky Note34"
+    },
+    {
+      "parameters": {
+        "content": "Slik håndteres 1000 leverandører samtidig:\n1. Master Scheduler splitter opp (Distributøren)\nMaster Scheduler-workflowen din er nøkkelen til parallellitet:\n\nDen henter listen over alle 1000 aktive leverandører.\n\nNoden Split in Batches (med en batchstørrelse på 1) deler denne listen inn i 1000 separate datapakker.\n\nHver pakke blir deretter sendt til LAGERSYKRONISERING via uavhengige, parallelle kjøringer.\n\n2. LAGERSYKRONISERING er en uavhengig arbeider\nLAGERSYKRONISERING er designet som en \"Worker Flow\" som kun bryr seg om én ting: profilen den mottok. Den:\n\nHenter data kun for denne ene leverandøren.\n\nSammenligner data kun for denne ene leverandøren.\n\nOppdaterer Shopify kun for denne ene leverandøren.\n\nNår systemet ditt (f.eks. n8n) mottar 1000 forespørsler om å starte LAGERSYKRONISERING, vil det starte disse som 1000 samtidige prosesser.\n\nEn viktig fotnote: Begrensninger (Throttling)\nSelv om det er teknisk mulig å kjøre 1000 synkroniseringer samtidig, er det viktig å være klar over to flaskehalser:\n\nShopify API Rate Limits: Shopify begrenser hvor mange API-kall du kan gjøre per tidsenhet. Hvis du prøver å sende alle 1000 oppdateringer nøyaktig samtidig, kan du fort \"møte veggen\" og få feilmeldinger fra Shopify.\n\nDin Workflow-plattform: Din valgte plattform (n8n, Airflow, etc.) har begrensninger på hvor mange aktive kjøringer den kan håndtere før ytelsen blir dårlig.\n\nLøsning: Throttling (Begrensning)\nFor å håndtere tusenvis av leverandører på en trygg måte, vil du ofte implementere throttling (begrensning) i Master Scheduler.\n\nI stedet for å dele opp i 1000 individuelle kjøringer og starte dem alle øyeblikkelig, kan du justere Master Scheduler til å:\n\nDele opp i batchene på f.eks. 10 eller 20.\n\nKjøre disse 10-20 pakkene parallelt.\n\nVente til de er ferdige.\n\nStarte de neste 10-20 pakkene.\n\nDette sikrer kontrollert og robust parallellitet, der du utnytter systemets kapasitet uten å overbelaste eksterne API-er eller databasen din.\n\nKonklusjon: Ja, arkitekturen din er riktig for å skalere til 1000+ leverandører. Du må bare overvåke og eventuelt justere parallelliseringsgraden (throttlingen) for å respektere eksterne grenser.",
+        "height": 896,
+        "width": 1056
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3152,
+        128
+      ],
+      "id": "9c1b66b4-55a6-40e8-837c-5d32e8e1ba56",
+      "name": "Sticky Note37"
+    },
+    {
+      "parameters": {
+        "content": "ETTERHVERT MÅ DU KANSKJE SE PÅ\n\nShopify API Rate Limits:\n\nDin Workflow-plattform:"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4352,
+        560
+      ],
+      "id": "3da690a5-ca7f-45f0-b851-cc22e1828cab",
+      "name": "Sticky Note38"
+    },
+    {
+      "parameters": {
+        "content": "1️⃣ Has inventory_item_id?\n\nDenne er riktig satt opp.\n\n{{$json.inventory_item_id}}\n\nIs Not Empty\n\n👉\nTRUE = produkt finnes i Shopify → oppdater lager\nFALSE = produkt finnes ikke → feilhåndtering\n\nDette er 100 % riktig 👌"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1456
+      ],
+      "id": "39c747a8-2b45-486d-9853-8fc849190b76",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Resultatet\n\nEtter denne noden har du:\n\nen liste over alle produkter som ikke finnes\n\nhvert element er forklarbart for kunden\n\nlett å:\n\nsende e-post\n\nvise i dashboard\n\nlagre i database",
+        "height": 336
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        2400
+      ],
+      "id": "6d6b3bd3-88a3-47a1-9716-44e4dcdc3dc4",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "SJEKKE DETTE 1️⃣ Ikke stopp hele syncen på feil (viktig)\n\nPass på at NOT_FOUND-grenene bare “faller ut”, og at resten av produktene fortsetter.\n\n👉 Riktig:\n\n90 produkter oppdateres\n\n10 havner i Mark not-found\n\nsyncen fullføres\n\n❌ Feil:\n\nén manglende SKU → hele kjøringen feiler\n\n(Dette har du nesten riktig allerede, bare pass på at ingen node “kaster error”)",
+        "height": 448
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        1936
+      ],
+      "id": "eb6399a9-4057-48f5-8315-dad544c3a0da",
+      "name": "Sticky Note39"
+    },
+    {
+      "parameters": {
+        "content": "Denne gir deg: én strøm med alle resultater",
+        "height": 80,
+        "width": 368
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        2368
+      ],
+      "id": "289b80ac-2e2b-49f2-ba5a-110a9d2c32cf",
+      "name": "Sticky Note40"
+    },
+    {
+      "parameters": {
+        "jsCode": "const all = $input.all();\n\nconst updated = all.filter(i => i.json.inventory_item_id).length;\nconst notFound = all.filter(i => i.json.status === \"NOT_FOUND\").length;\n\nreturn [{\n  json: {\n    updated_ok: updated,\n    not_found: notFound\n  }\n}];"
+      },
+      "id": "120dfb65-6e6f-4a31-be7c-0655b493d7e0",
+      "name": "Tell opp til slutt (Code-node)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        2192
+      ]
+    },
+    {
+      "parameters": {
+        "content": "STEG 4: Send én melding til kunden\n\nBruk output fra steget over.\n\nEksempel melding:\n\nLagersynk fullført.\n\nOppdatert: {{updated_ok}} produkter\nIkke funnet i Shopify: {{not_found}} produkter\n\nSjekk at matching key (SKU) stemmer.",
+        "height": 336
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2592,
+        2704
+      ],
+      "id": "cf370f99-930d-4b14-bb0c-80a8c9ee97b6",
+      "name": "Sticky Note41"
+    },
+    {
+      "parameters": {
+        "content": "HVA SER MED SNAPSHOTENE NÅR KUNDEN OPPTATTER PROFILEN SIN \n\nBØR JEG FLYTTE Lookup variant by SKU ETTER GOOGLE SHEET SLIK AT JEG KAN SE MEDENGANG HVILKENE SOM MACHER OG FEILER\n\nMÅ KANSKJE DELE OPP WORKFLOWEN",
+        "height": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4352,
+        752
+      ],
+      "id": "9efe84bd-057a-4e4a-9013-55e632414018",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "❌ 2. Du antar at “SKU = alltid riktig nøkkel”\n\nDu støtter EAN / ID i teorien, men:\n\nShopify-lookupen er hardkodet mot sku:\n\nDette er en farlig antakelse.\n\nVirkeligheten:\n\nMange butikker har tom SKU\n\nSamme SKU på flere varianter\n\nLeverandør-SKU ≠ Shopify-SKU\n\n👉 Dette kommer til å bli din #1 support-headache.\n\nDu bør:\n\ngjøre matching_key_type eksplisitt i lookup-logikken\n\nfeile tydelig hvis valgt nøkkel ikke gir entydig treff",
+        "height": 480,
+        "width": 512
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4288,
+        1008
+      ],
+      "id": "cdf37b15-db6b-4760-bc4b-f3e008367d3f",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into sync_runs (run_id, tenant_id, supplier_id, trigger, status)\nvalues ($1, $2, $3, $4, 'running');\n",
+        "options": {
+          "queryReplacement": "={{ $('run_id').item.json.run_id }}, {{$json.profile.customer_id}}, {{$json.profile.supplier_id}}, {{ $('run_id').item.json.trigger }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1568,
+        1376
+      ],
+      "id": "a1544da4-bac6-4105-ab4d-6bd5f7f495e4",
+      "name": "Insert start run",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update sync_runs\nset\n  status = case when $5 > 0 then 'partial_failed' else 'success' end,\n  finished_at = now(),\n  updated_count = $2,\n  skipped_count = $3,\n  not_found_count = $4,\n  error_count = $5,\n  error_summary = $6\nwhere run_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $items(\"run_id\")[0].json.run_id }}, {{$json.updated_count}},{{$json.skipped_count}},{{$json.not_found_count}}, {{$json.error_count}}, {{$json.error_summary}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -944,
+        1392
+      ],
+      "id": "72822ac5-7eb1-4f2f-bfca-1f4124cfde3f",
+      "name": "Update end run",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "run_id\n\nHva: Lager én unik ID for denne kjøringen (én sync).\n\nHvorfor:\n– Lar deg vite hvilken sync som feilet eller lyktes\n– Nødvendig for logging, feilsøking og UI (“sist kjørt”)",
+        "height": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        1520
+      ],
+      "id": "d38b80b2-0b06-421e-bb8a-e46d03a01e99",
+      "name": "Sticky Note13"
+    },
+    {
+      "parameters": {
+        "content": "Insert start run\n\nHva: Oppretter en rad i sync_runs med status = running.\n\nHvorfor:\n– Forteller systemet: “Denne syncen har startet”\n– Uten denne vet du ikke om noe kjører akkurat nå",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1584,
+        1520
+      ],
+      "id": "f17c0699-ba9b-4c98-8646-fd8590534464",
+      "name": "Sticky Note36"
+    },
+    {
+      "parameters": {
+        "content": "Tell resultat\n\nHva: Teller hva som skjedde i syncen:\n– hvor mange oppdatert\n– hvor mange hoppet over\n– hvor mange ikke funnet\n– hvor mange feil\n\nHvorfor:\n– Gir deg tall til dashboard, e-post og status\n– Grunnlaget for success vs partial_failed",
+        "height": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        1536
+      ],
+      "id": "d719c1c0-4f56-4adf-811b-1eb4d63891ed",
+      "name": "Sticky Note42"
+    },
+    {
+      "parameters": {
+        "content": "Update end run\n\nHva: Lukker sync-runen i databasen.\nSetter:\n– status = success | partial_failed\n– finished_at\n– alle tellerne\n\nHvorfor:\n– Marker at jobben er ferdig\n– Helt kritisk for “sist kjørt”, historikk og stabil drift",
+        "height": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        1552
+      ],
+      "id": "e3da6b13-928c-43bd-b292-6a0038b7ed65",
+      "name": "Sticky Note43"
+    },
+    {
+      "parameters": {
+        "jsCode": "let finalStatus = 'success';\nif (error_count > 0) {\n  finalStatus = updated_count > 0 ? 'partial_failed' : 'failed';\n}\n\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1280,
+        1376
+      ],
+      "id": "c5d572ce-40e9-423b-beba-d3bfe7be158f",
+      "name": "Tell resultat1"
+    },
+    {
+      "parameters": {
+        "jsCode": "function uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\nreturn [{ json: { ...$json, run_id: uuidv4(), trigger: $json.trigger ?? \"manual\" } }];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1808,
+        1376
+      ],
+      "id": "0b7f96c1-9cd5-4ced-abfb-aaaa962e0abc",
+      "name": "run_id"
+    },
+    {
+      "parameters": {
+        "jsCode": "const run_id = $items('Insert start run1')[0].json.run_id;\nreturn $input.all().map(item => {\n  return {\n    json: {\n      ...item.json,\n      run_id\n    }\n  };\n});"
+      },
+      "name": "Distribute run_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3120,
+        640
+      ],
+      "id": "5fbdff2d-43a2-4344-a65a-a033aa375016"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sync_runs (\n  tenant_id,\n  supplier_id,\n  trigger,\n  status,\n  started_at\n) VALUES (\n  '{{ $json.profile.customer_id }}',\n  '{{ $json.profile.supplier_id }}',\n  '{{ $json.trigger || \"manual\" }}',\n  'running',\n  now()\n) RETURNING run_id;",
+        "options": {}
+      },
+      "name": "Insert start run1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        -3312,
+        640
+      ],
+      "id": "da8713cb-b805-48f1-a9fa-89c46f5baf63",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet updated_count = 0;\nlet skipped_count = 0;\nlet not_found_count = 0;\nlet error_count = 0;\nconst run_id = items[0].json.run_id;\n\nfor (const item of items) {\n  const status = item.json.status || '';\n  if (status === 'updated') updated_count++;\n  else if (status === 'skipped_unchanged') skipped_count++;\n  else if (status === 'not_found') not_found_count++;\n  else if (status === 'error') error_count++;\n}\n\nlet final_status = 'success';\nif (error_count > 0) {\n  final_status = updated_count > 0 ? 'partial_failed' : 'failed';\n}\n\nreturn [{\n  json: {\n    run_id,\n    updated_count,\n    skipped_count,\n    not_found_count,\n    error_count,\n    status: final_status,\n    error_summary: {\n      top_level: \"ok\",\n      message: error_count > 0 ? \"Noen varer feilet\" : \"Ingen feil\"\n    }\n  }\n}];"
+      },
+      "name": "Tell resultat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        1280
+      ],
+      "id": "805fe83e-c46c-429c-b7b0-7529659fd665"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE sync_runs\nSET\n  status = '{{ $json.status }}',\n  finished_at = now(),\n  updated_count = {{ $json.updated_count }},\n  skipped_count = {{ $json.skipped_count }},\n  not_found_count = {{ $json.not_found_count }},\n  error_count = {{ $json.error_count }},\n  error_summary = '{{ JSON.stringify($json.error_summary) }}'::jsonb\nWHERE run_id = '{{ $json.run_id }}';\n\n",
+        "options": {}
+      },
+      "name": "Update end run1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        1280
+      ],
+      "id": "d8fbff6d-8246-4639-946d-3ce0b1f32336",
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const run_id = $items('Insert start run1')[0].json.run_id;\nreturn $input.all().map(item => {\n  return {\n    json: {\n      ...item.json,\n      run_id\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        1280
+      ],
+      "id": "aeaec091-1d0b-4058-8d0b-eb22cd793d09",
+      "name": "run_id1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.new_qty}}",
+              "operation": "notEqual",
+              "value2": "={{$json.old_qty}}"
+            }
+          ]
+        }
+      },
+      "name": "IF - Qty changed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        1280
+      ],
+      "id": "ef43fe99-6f02-4434-b4c6-745d9c2f45f0"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "skipped_unchanged"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Tag skipped unchanged1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        1520
+      ],
+      "id": "2321f56c-2f39-48e4-b953-47a73326bbec"
+    },
+    {
+      "parameters": {
+        "content": "IF - Qty changed?\n\nHva gjør den?\nSjekker om antall (new_qty) er forskjellig fra det som er i Shopify (old_qty).\n\nHvis det er forskjell → send til Shopify for oppdatering\n\nHvis det ikke er forskjell → send videre til Tag skipped unchanged",
+        "height": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        992
+      ],
+      "id": "a5820fd3-421b-40a0-acc4-cba2c7235fd8",
+      "name": "Sticky Note35"
+    },
+    {
+      "parameters": {
+        "content": "Tag skipped unchanged\n\nHva gjør den?\nMerker produkter med status = \"skipped_unchanged\" slik at vi vet de ikke ble oppdatert.\n\nBrukes i Tell resultat for å telle hvor mange som ble hoppet over",
+        "height": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1664
+      ],
+      "id": "1cff795b-4326-4291-9c6f-7bebc35db936",
+      "name": "Sticky Note44"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.profile.connection_type }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "google_sheet"
+            },
+            {
+              "value2": "url",
+              "output": 1
+            },
+            {
+              "value2": "API",
+              "output": 2
+            },
+            {
+              "value2": "csv",
+              "output": 3
+            }
+          ]
+        }
+      },
+      "name": "Switch - Connection Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -3024,
+        1072
+      ],
+      "id": "4606cbeb-4132-4949-afe6-9e13a62afd50"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Load from Google Sheets",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        784
+      ],
+      "id": "ed819361-ca6c-48d9-be6b-c3c1ad5df0eb"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "Load from API JSON"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Load from API JSON",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        1264
+      ],
+      "id": "c40914f3-16de-4d20-9ea1-4ac5e233afd2"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "Load from URL CSV"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Load from URL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        1040
+      ],
+      "id": "50a18193-6639-407d-931a-5f396b9362be"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.profile.connection.url }}",
+        "jsonParameters": true,
+        "options": {}
+      },
+      "name": "Hent fra API JSON",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        1264
+      ],
+      "id": "017fe58b-51ad-423d-94b4-55afb8043efd"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.profile.connection.sheet_url }}",
+        "responseFormat": "file",
+        "jsonParameters": true,
+        "options": {}
+      },
+      "name": "Hent fra URL CSV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        -2336,
+        1504
+      ],
+      "id": "d606cec7-4966-4c7c-bfb7-d4a1a0c888e6"
+    },
+    {
+      "parameters": {
+        "operation": "read"
+      },
+      "name": "Parse CSV",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [
+        -2128,
+        1504
+      ],
+      "id": "3db889ef-6d35-4363-954d-9845e3f86125"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "Load from FTP CSV"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Load from fil",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        1504
+      ],
+      "id": "5444a6df-040b-4325-be70-71ebc50905aa"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.error.message}}",
+              "operation": "contains",
+              "value2": "429"
+            }
+          ]
+        }
+      },
+      "id": "8f7e8ae4-ef71-4277-bfd0-f63dd402a42a",
+      "name": "IF 429",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        1488
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "seconds"
+      },
+      "id": "dfcd8f28-0f03-4de4-9a9b-6a576b998d8a",
+      "name": "Wait 3s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        1472
+      ],
+      "webhookId": "5f48918e-b2a8-4828-ac9b-e9f3e0cf5162"
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "url": "https://your-shopify-endpoint.com",
+        "options": {}
+      },
+      "id": "c8c37573-bd09-4115-990e-a3106c1b6a48",
+      "name": "Shopify Retry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1984,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "content": "🔁 Hva den gjør:\nNode\tFunksjon\nShopify Request 1\tSender første PATCH-kall til Shopify\nIF 429\tSjekker om feilmeldingen inneholder 429 (rate limit)\nWait 3s\tVenter 3 sekunder før retry\nShopify Retry\tPrøver PATCH-kallet på nytt",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        1664
+      ],
+      "id": "4f993555-8d1e-4045-9269-41c1941d7f49",
+      "name": "Sticky Note45"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.error.message || ''}}",
+              "operation": "contains",
+              "value2": "429"
+            }
+          ]
+        }
+      },
+      "id": "84086636-49cc-4423-8a19-2dc97aee2745",
+      "name": "IF 429 Retry Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        1744
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "0e6bed8e-0250-4aee-a7fd-4474f583af97",
+      "name": "Set Error Object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "Feilhåndtering ",
+        "options": {}
+      },
+      "id": "1d5cb425-06b3-4d3f-92ab-0cef0633f9f8",
+      "name": "Trigger Feilhåndtering",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        1744
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "name": "Set supplier_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        -4176,
+        736
+      ],
+      "id": "de05de42-9958-466a-85cf-ba4169d14f62"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM sync_runs\nWHERE supplier_id = '{{ $json.profile.id }}'\nAND status = 'running'\nLIMIT 1;\n\n",
+        "additionalFields": {}
+      },
+      "name": "Check existing run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        -3968,
+        736
+      ],
+      "id": "cb425a5b-3fa6-4261-a3e2-70aa27b1510c",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "throw new Error(\"Det pågår allerede en lager-synk for denne leverandøren.\");\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3664,
+        1168
+      ],
+      "id": "eed689a0-0569-47ca-815f-d53b13623362",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b1ba85b1-65bf-4b37-a79f-7f5bbab6f096",
+              "leftValue": "={{ $items.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3776,
+        736
+      ],
+      "id": "42d2973b-9317-42e9-be12-ef84afc4a8d8",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "content": "📌 Dobbelt sjekker om leverandøren allerede har en aktiv synk.\n– Hvis ja → stopp.\n– Hvis nei → start ny sync.\n\n➡️ Hindrer at to synkroniseringer kjører samtidig for samme leverandør.",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -4016,
+        912
+      ],
+      "id": "edfc95a1-bc8e-4f01-8929-feaeba415c28",
+      "name": "Sticky Note46"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Hent fra Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Strukturerer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Set supplier_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strukturerer": {
+      "main": [
+        [
+          {
+            "node": "Take One",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge (Choose Input 1)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "test": {
+      "main": [
+        [
+          {
+            "node": "Insert start run1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch - Connection Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Profile": {
+      "main": [
+        [
+          {
+            "node": "Lookup variant by SKU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup variant by SKU": {
+      "main": [
+        [
+          {
+            "node": "Pick inventory_item_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick inventory_item_id": {
+      "main": [
+        [
+          {
+            "node": "Has inventory_item_id?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has inventory_item_id?": {
+      "main": [
+        [
+          {
+            "node": "IF - Qty changed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark not-found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark not-found": {
+      "main": [
+        [
+          {
+            "node": "Merge results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge results": {
+      "main": [
+        [
+          {
+            "node": "Tell opp til slutt (Code-node)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Take One": {
+      "main": [
+        [
+          {
+            "node": "Has Snapshot?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Snapshot?1": {
+      "main": [
+        [
+          {
+            "node": "Merge (Choose Input 1)1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge (Choose Input 1)1": {
+      "main": [
+        [
+          {
+            "node": "First Run? (has_prev)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "First Run? (has_prev)1": {
+      "main": [
+        [
+          {
+            "node": "Sammenlign lagerstatus",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Attach Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Oppdaterer shopify inventory": {
+      "main": [
+        [
+          {
+            "node": "Merge results",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Tell resultat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture status1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Write Snapshot (ALL)1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Sammenlign og Filtrer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sammenlign og Filtrer": {
+      "main": [
+        [
+          {
+            "node": "Legg til Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Legg til Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Call 'Oppdater Shopify Lagerstatus'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sammenlign lagerstatus": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'Oppdater Shopify Lagerstatus'": {
+      "main": [
+        [
+          {
+            "node": "Attach Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert start run": {
+      "main": [
+        []
+      ]
+    },
+    "Update end run": {
+      "main": [
+        []
+      ]
+    },
+    "Tell resultat1": {
+      "main": [
+        []
+      ]
+    },
+    "Write Snapshot (ALL)1": {
+      "main": [
+        []
+      ]
+    },
+    "run_id": {
+      "main": [
+        []
+      ]
+    },
+    "Distribute run_id": {
+      "main": [
+        [
+          {
+            "node": "Switch - Connection Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert start run1": {
+      "main": [
+        [
+          {
+            "node": "Distribute run_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell resultat": {
+      "main": [
+        [
+          {
+            "node": "run_id1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update end run1": {
+      "main": [
+        [
+          {
+            "node": "Capture status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "run_id1": {
+      "main": [
+        [
+          {
+            "node": "Update end run1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Qty changed?": {
+      "main": [
+        [
+          {
+            "node": "Oppdaterer shopify inventory",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tag skipped unchanged1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Connection Type": {
+      "main": [
+        [
+          {
+            "node": "Load from Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load from URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load from API JSON",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load from fil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load from Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Hent fra Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load from URL": {
+      "main": [
+        []
+      ]
+    },
+    "Hent fra URL CSV": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load from API JSON": {
+      "main": [
+        [
+          {
+            "node": "Hent fra API JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load from fil": {
+      "main": [
+        [
+          {
+            "node": "Hent fra URL CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF 429": {
+      "main": [
+        [
+          {
+            "node": "Wait 3s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3s": {
+      "main": [
+        [
+          {
+            "node": "Shopify Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF 429 Retry Failed": {
+      "main": [
+        [
+          {
+            "node": "Set Error Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Error Object": {
+      "main": [
+        [
+          {
+            "node": "Trigger Feilhåndtering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify Retry": {
+      "main": [
+        [
+          {
+            "node": "IF 429 Retry Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set supplier_id": {
+      "main": [
+        [
+          {
+            "node": "Check existing run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check existing run": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "test",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "WiLelVwduxgsRreS"
+  },
+  "versionId": "aadf72b7-3cf6-4121-a6b0-844c7f70b591",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d455e9dc64af83df6cf9e9ce94a211fb5530f762790d157d6d23731c419b46cf"
+  },
+  "id": "rruFbrmcS19bWEN7",
+  "tags": [
+    {
+      "updatedAt": "2025-12-06T23:26:45.309Z",
+      "createdAt": "2025-12-06T23:26:45.309Z",
+      "id": "SzN9clVOY3IOnAVU",
+      "name": "Lager"
+    }
+  ]
+}

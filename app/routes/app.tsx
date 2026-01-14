@@ -1,49 +1,55 @@
 import { Outlet, Link, useLocation } from "react-router";
-import { AppProvider } from "@shopify/polaris";
-import enTranslations from "@shopify/polaris/locales/en.json";
+
+const navItems = [
+  { label: "Dashboard", href: "/app" },
+  { label: "Suppliers", href: "/app/suppliers" },
+  { label: "Products", href: "/app/products" },
+  { label: "Activity", href: "/app/activity" },
+  { label: "Settings", href: "/app/settings" },
+];
 
 export default function AppLayout() {
   const location = useLocation();
-
-  const navItems = [
-    { label: "Dashboard", href: "/app" },
-    { label: "Suppliers", href: "/app/suppliers" },
-    { label: "Products", href: "/app/products" },
-    { label: "Activity", href: "/app/activity" },
-    { label: "Settings", href: "/app/settings" },
-  ];
+  const withSearch = (pathname: string) => ({
+    pathname,
+    search: location.search,
+  });
 
   return (
-    <AppProvider i18n={enTranslations}>
-      <div className="flex min-h-screen bg-slate-50">
-        <aside className="fixed inset-y-0 left-0 w-64 bg-[#0f172a] text-white z-40 hidden lg:block">
-          <div className="flex flex-col h-full p-6">
-            <div className="mb-10 px-2 text-xl font-bold tracking-tight">
-              STOCK<span className="text-blue-400">SYNC</span>
-            </div>
-            <nav className="flex-1 space-y-2">
-              {navItems.map((item) => (
+    <div className="min-h-screen bg-slate-50">
+      <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200/70">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
+          <div className="text-lg font-bold text-slate-900">
+            STOCK<span className="text-blue-500">SYNC</span>
+          </div>
+          <nav className="flex items-center gap-2 text-sm">
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
                 <Link
                   key={item.href}
-                  to={item.href}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    location.pathname === item.href 
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" 
-                      : "text-slate-400 hover:bg-white/10 hover:text-white"
+                  to={withSearch(item.href)}
+                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
+                    isActive ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
                   }`}
                 >
-                  <span className="font-medium">{item.label}</span>
+                  {item.label}
                 </Link>
-              ))}
-            </nav>
-          </div>
-        </aside>
-        <main className="flex-1 lg:pl-64 text-slate-900">
-          <div className="p-8">
-            <Outlet />
-          </div>
-        </main>
-      </div>
-    </AppProvider>
+              );
+            })}
+          </nav>
+          <div className="flex-1" />
+          <Link
+            to={withSearch("/app/suppliers/new")}
+            className="rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-3 py-2 text-sm font-semibold shadow"
+          >
+            + Add Supplier
+          </Link>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6">
+        <Outlet />
+      </main>
+    </div>
   );
 }

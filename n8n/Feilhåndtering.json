@@ -1,0 +1,232 @@
+{
+  "name": "Feilhåndtering",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8e6e8c0f-cc66-4da1-8b13-d9f23a6a6299",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Feilhåndtering-workflowen:\n\nLogger og kategoriserer feilen\n\nOppdaterer databasen\n\n(valgfritt) sender Slack / e-post",
+        "height": 176
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -288
+      ],
+      "id": "408cb302-c6f6-4c12-806a-65754c5b37c1",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  item.json.myNewField = 1;\n}\n\nreturn $input.all();"
+      },
+      "id": "ca3cf492-2c88-4607-b0a9-883399c03cf4",
+      "name": "Kategoriser Feil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        272,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "table": "sync_runs",
+        "columns": "status, error_summary, finished_at, error_count",
+        "additionalFields": {}
+      },
+      "id": "2df1007c-b663-4ed3-bd4c-6941675d6e6f",
+      "name": "Oppdater Sync Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        512,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "bOh2QB6wJbL33nJY",
+          "name": "Postgres account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.code}}",
+              "operation": "in",
+              "value2": "AUTH_ERROR,RATE_LIMIT,SOURCE_ERROR"
+            }
+          ]
+        }
+      },
+      "name": "Er kritisk feil?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        0
+      ],
+      "id": "2c5f8fd2-06d3-4fc2-ab2b-bf4b9ea032ec"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.profile.notifications.mode}}",
+              "value2": "all_errors"
+            }
+          ]
+        }
+      },
+      "name": "Vil ha alle feil?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        800,
+        224
+      ],
+      "id": "174aad7f-099b-48c7-afce-4f0e9875deb4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.profile.notifications.mode}}",
+              "value2": "critical_only"
+            }
+          ]
+        }
+      },
+      "name": "Vil ha kun kritiske?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        784,
+        -224
+      ],
+      "id": "8a3e7693-ffd6-4f3f-860b-92be638ce1a2"
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@dittdomene.no",
+        "toEmail": "={{$json.profile.notifications.to}}",
+        "subject": "🚨 Feil i lagersynk: {{$json.code}}",
+        "text": "Hei,\n\nDet oppstod en feil i siste lagersynk:\n\nFeilkode: {{$json.code}}\nMelding: {{$json.message}}\n\nHilsen,\nLagersync-systemet",
+        "options": {}
+      },
+      "name": "Send e-post",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        0
+      ],
+      "id": "06872cff-4c47-4b3d-a86c-f8095a8bb3d8"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Kategoriser Feil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kategoriser Feil": {
+      "main": [
+        [
+          {
+            "node": "Oppdater Sync Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vil ha alle feil?": {
+      "main": [
+        [
+          {
+            "node": "Send e-post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vil ha kun kritiske?": {
+      "main": [
+        [
+          {
+            "node": "Send e-post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Er kritisk feil?": {
+      "main": [
+        [
+          {
+            "node": "Send e-post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Oppdater Sync Run": {
+      "main": [
+        [
+          {
+            "node": "Vil ha kun kritiske?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Er kritisk feil?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Vil ha alle feil?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f6994af8-1612-427e-a76f-9b956a635e2d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d455e9dc64af83df6cf9e9ce94a211fb5530f762790d157d6d23731c419b46cf"
+  },
+  "id": "WiLelVwduxgsRreS",
+  "tags": []
+}
