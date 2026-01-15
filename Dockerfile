@@ -10,7 +10,7 @@ RUN apt-get update \
 WORKDIR /app
 
 # Change this number when you want to force a full reinstall
-ARG CACHEBUST=2
+ARG CACHEBUST=3
 RUN echo "cachebust=$CACHEBUST"
 
 # 1) Copy package files FIRST (this is critical for caching correctness)
