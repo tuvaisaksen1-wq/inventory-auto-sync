@@ -12,9 +12,8 @@ ENV NODE_ENV=production
 # Copy package files first
 COPY package.json package-lock.json* ./
 
-# IMPORTANT:
-# npm ci + lockfile made on Mac can break optional Linux deps (Rollup native)
-# Fix: remove lockfile and install fresh on Linux image
+RUN echo "RAILWAY_CACHE_BUST=2026-01-15-1"
+
 RUN rm -f package-lock.json \
   && npm install --include=optional --no-audit --no-fund \
   && npm cache clean --force
