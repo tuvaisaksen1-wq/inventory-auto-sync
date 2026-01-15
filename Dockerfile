@@ -9,19 +9,23 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Force fresh dependency resolution on Linux (avoid macOS lockfile issues)
-ARG CACHEBUST=1
+# Change this number when you want to force a full reinstall
+ARG CACHEBUST=2
 RUN echo "cachebust=$CACHEBUST"
 
+# 1) Copy package files FIRST (this is critical for caching correctness)
 COPY package.json package-lock.json ./
 
-# IMPORTANT: remove lockfile in builder so Linux optional deps (rollup native) are installed
-RUN rm -f package-lock.json \
-  && rm -rf node_modules \
+# 2) Install deps (dev + optional) and FORCE install the linux rollup native module
+RUN rm -rf node_modules \
   && npm install --include=optional --no-audit --no-fund \
+  && npm install --no-save @rollup/rollup-linux-x64-gnu \
   && npm rebuild rollup
 
+# 3) Copy source AFTER deps
 COPY . .
+
+# 4) Build
 RUN npm run build
 
 
@@ -37,12 +41,10 @@ RUN apt-get update \
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Runtime deps should stay deterministic
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --include=optional --no-audit --no-fund \
   && npm cache clean --force
 
-# Copy build output + runtime files
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/app ./app
 COPY --from=builder /app/prisma ./prisma
