@@ -18,7 +18,8 @@ COPY package.json package-lock.json ./
 
 # 2) Install deps (dev + optional) without relying on lockfile optional entries
 RUN rm -rf node_modules package-lock.json \
-  && npm install --include=optional --no-audit --no-fund
+  && npm install --include=optional --no-audit --no-fund \
+  && npm install --no-save @rollup/rollup-linux-x64-gnu@4.54.0
 
 # 3) Copy source AFTER deps
 COPY . .
