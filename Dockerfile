@@ -9,8 +9,9 @@ ENV NODE_ENV=production
 
 COPY package.json package-lock.json* ./
 
-RUN npm install -g npm@latest \
-  && npm ci --include=optional \
+# Avoid npm ci since optional platform packages are not present in the lockfile.
+RUN rm -f package-lock.json \
+  && npm install --include=optional \
   && npm cache clean --force
 
 COPY . .
