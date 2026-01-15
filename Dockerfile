@@ -22,6 +22,10 @@ RUN npm install --no-save @rollup/rollup-linux-x64-gnu lightningcss --no-audit -
 
 COPY . .
 
+# Force non-native paths in CI to avoid optional deps native bindings
+ENV ROLLUP_DISABLE_NATIVE=1
+ENV LIGHTNINGCSS_DISABLE_NATIVE=1
+
 RUN npm run build
 
 
