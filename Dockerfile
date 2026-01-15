@@ -9,17 +9,18 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Cache bust to force reinstall on Railway when needed
+# Force fresh dependency resolution on Linux (avoid macOS lockfile issues)
 ARG CACHEBUST=1
 RUN echo "cachebust=$CACHEBUST"
 
-# Install deps in a way that avoids npm optional-deps bug for Rollup
 COPY package.json package-lock.json ./
-RUN rm -rf node_modules \
+
+# IMPORTANT: remove lockfile in builder so Linux optional deps (rollup native) are installed
+RUN rm -f package-lock.json \
+  && rm -rf node_modules \
   && npm install --include=optional --no-audit --no-fund \
   && npm rebuild rollup
 
-# Copy source + build
 COPY . .
 RUN npm run build
 
@@ -36,7 +37,7 @@ RUN apt-get update \
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install only production dependencies (still include optional)
+# Runtime deps should stay deterministic
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --include=optional --no-audit --no-fund \
   && npm cache clean --force
@@ -45,8 +46,6 @@ RUN npm ci --omit=dev --include=optional --no-audit --no-fund \
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/app ./app
 COPY --from=builder /app/prisma ./prisma
-
-# If you serve static assets from /public at runtime, keep this:
 COPY --from=builder /app/public ./public
 
 EXPOSE 3000
