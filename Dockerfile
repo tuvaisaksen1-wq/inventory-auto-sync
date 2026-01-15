@@ -16,16 +16,15 @@ RUN echo "cachebust=$CACHEBUST"
 # 1) Copy package files FIRST (this is critical for caching correctness)
 COPY package.json package-lock.json ./
 
-# 2) Install deps (dev + optional) and FORCE install the linux rollup native module
-RUN rm -rf node_modules \
-  && npm install --include=optional --no-audit --no-fund \
-  && npm install --no-save @rollup/rollup-linux-x64-gnu \
-  && npm rebuild rollup
+# 2) Install deps (dev + optional) without relying on lockfile optional entries
+RUN rm -rf node_modules package-lock.json \
+  && npm install --include=optional --no-audit --no-fund
 
 # 3) Copy source AFTER deps
 COPY . .
 
-# 4) Build
+# 4) Build (force JS fallback to avoid missing native rollup binary)
+ENV ROLLUP_SKIP_NODE_JS_NATIVE=1
 RUN npm run build
 
 
@@ -42,7 +41,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --include=optional --no-audit --no-fund \
+RUN rm -rf node_modules package-lock.json \
+  && npm install --omit=dev --include=optional --no-audit --no-fund \
   && npm cache clean --force
 
 COPY --from=builder /app/build ./build
