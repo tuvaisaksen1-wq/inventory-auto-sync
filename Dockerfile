@@ -12,8 +12,10 @@ ENV NPM_CONFIG_OPTIONAL=true
 ENV NPM_CONFIG_INCLUDE=optional
 
 # Change this number when you want to force a full reinstall
-ARG CACHEBUST=4
+ARG CACHEBUST=99
 RUN echo "cachebust=$CACHEBUST"
+RUN node -p "process.platform + ' ' + process.arch"
+
 
 # 1) Copy package files FIRST (this is critical for caching correctness)
 COPY package.json package-lock.json ./
