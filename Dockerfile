@@ -8,9 +8,11 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ENV NPM_CONFIG_OPTIONAL=true
+ENV NPM_CONFIG_INCLUDE=optional
 
 # Change this number when you want to force a full reinstall
-ARG CACHEBUST=3
+ARG CACHEBUST=4
 RUN echo "cachebust=$CACHEBUST"
 
 # 1) Copy package files FIRST (this is critical for caching correctness)
