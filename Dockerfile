@@ -16,8 +16,9 @@ RUN npm install --include=optional --no-audit --no-fund
 
 # HARD FIX: installer rollup sin linux-gnu native pakke eksplisitt
 # Dette omgår npm/optional-buggen i containere
-RUN npm install --no-save @rollup/rollup-linux-x64-gnu --no-audit --no-fund \
-  && npm rebuild rollup
+RUN npm install --no-save @rollup/rollup-linux-x64-gnu lightningcss --no-audit --no-fund \
+  && npm rebuild rollup \
+  && npm rebuild lightningcss
 
 COPY . .
 
