@@ -129,14 +129,47 @@ export default function AddSupplier() {
 
     try {
       const supplierId = toSupplierId(formData.name);
-      const res = await fetch("/start-sync", {
+      const shopDomain = getShopDomainFromLocation();
+      const setupRes = await fetch("/api/supplier-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplier_id: supplierId,
+          name: formData.name,
+          description: formData.description,
+          matching_key_type: formData.matching_key_type,
+          connection_type: formData.connection_type,
+          api_url: formData.api_url,
+          api_key: formData.api_key,
+          api_endpoint: formData.api_endpoint,
+          sheet_url: formData.sheet_url,
+          sheet_name: formData.sheet_name,
+          sheet_matching_tab: formData.sheet_matching_tab,
+          sheet_tab: formData.sheet_tab,
+          file_url: formData.file_url,
+          scrape_url: formData.scrape_url,
+          scrape_permission: formData.scrape_permission,
+          sync_frequency: formData.sync_frequency,
+          notification_types: formData.notification_types,
+          status: formData.status,
+          shop_domain: shopDomain,
+        }),
+      });
+      const setupData = await setupRes.json();
+
+      if (!setupRes.ok) {
+        setSubmitError(setupData?.message || "Failed to save supplier profile.");
+        return;
+      }
+
+      const startRes = await fetch("/start-sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ supplier_id: supplierId }),
       });
-      const data = await res.json();
+      const data = await startRes.json();
 
-      if (!res.ok) {
+      if (!startRes.ok) {
         setSubmitError(data?.message || "Failed to start sync.");
         return;
       }
@@ -208,10 +241,6 @@ export default function AddSupplier() {
         </React.Fragment>
       ))}
     </div>
-  );
-
-  const SectionCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-    <div className={`bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 ${className}`}>{children}</div>
   );
 
   return (
@@ -690,6 +719,20 @@ export default function AddSupplier() {
   );
 }
 
+function SectionCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
 function Input({
   label,
   placeholder,
@@ -764,4 +807,14 @@ function SummaryRow({ label, value }: { label: string; value: React.ReactNode })
       <span className="font-medium text-slate-800">{value}</span>
     </div>
   );
+}
+
+function getShopDomainFromLocation() {
+  if (typeof window === "undefined") return null;
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get("shop");
+  } catch {
+    return null;
+  }
 }
