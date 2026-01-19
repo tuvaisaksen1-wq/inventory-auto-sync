@@ -8,6 +8,55 @@ const json = (data: unknown, init: ResponseInit = {}) => {
 };
 
 const N8N_SUPPLIER_SETUP_URL = process.env.N8N_SUPPLIER_SETUP_URL;
+const DEFAULT_SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+
+type RawInput = Record<string, unknown>;
+
+function toSupplierId(value: string) {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return slug || "supplier";
+}
+
+async function readInput(request: Request): Promise<RawInput> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const body = (await request.json().catch(() => ({}))) as RawInput;
+    return body && typeof body === "object" ? body : {};
+  }
+
+  if (
+    contentType.includes("multipart/form-data") ||
+    contentType.includes("application/x-www-form-urlencoded")
+  ) {
+    const form = await request.formData();
+    return Object.fromEntries(form.entries());
+  }
+
+  // Fallback: try JSON, otherwise return empty input.
+  const body = (await request.json().catch(() => ({}))) as RawInput;
+  return body && typeof body === "object" ? body : {};
+}
+
+function toStringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function toStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item)).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   if (!N8N_SUPPLIER_SETUP_URL) {
@@ -17,50 +66,111 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const form = await request.formData();
+  const input = await readInput(request);
+  const url = new URL(request.url);
+  const headerShop = request.headers.get("X-Shopify-Shop-Domain");
+  const shopDomain =
+    toStringValue(input.shop_domain) ||
+    headerShop ||
+    url.searchParams.get("shop") ||
+    null;
+
+  const name = toStringValue(input.name);
+  const supplierId =
+    toStringValue(input.supplier_id) || (name ? toSupplierId(name) : "");
+  const matchingKey =
+    toStringValue(input.matching_key) ||
+    toStringValue(input.matching_key_type) ||
+    "sku";
+  const connectionType =
+    toStringValue(input.connection_type) || "google_sheet";
+  const frequency =
+    toStringValue(input.frequency) ||
+    toStringValue(input.sync_frequency) ||
+    "6h";
+  const notificationTypes = toStringArray(input.notification_types);
+  const accessToken =
+    toStringValue(input.access_token) || DEFAULT_SHOPIFY_ACCESS_TOKEN || "";
+
+  if (!supplierId || !name) {
+    return json(
+      { ok: false, message: "Missing supplier name or supplier_id" },
+      { status: 400 }
+    );
+  }
+
+  const connection: Record<string, unknown> = {
+    type: connectionType,
+  };
+
+  if (connectionType === "api") {
+    connection.api_url = toStringValue(input.api_url);
+    connection.api_key = toStringValue(input.api_key);
+    connection.api_endpoint = toStringValue(input.api_endpoint);
+  }
+
+  if (connectionType === "google_sheet") {
+    connection.sheet_url = toStringValue(input.sheet_url);
+    connection.sheet_name = toStringValue(input.sheet_name);
+    connection.tabs = {
+      source: toStringValue(input.sheet_name),
+      headerRow: 1,
+      match_col: toStringValue(input.sheet_matching_tab),
+      qty_col: toStringValue(input.sheet_tab),
+    };
+  }
+
+  if (connectionType === "csv" || connectionType === "excel") {
+    connection.file_url = toStringValue(input.file_url);
+  }
+
+  if (connectionType === "url") {
+    connection.scrape_url = toStringValue(input.scrape_url);
+    connection.scrape_permission = Boolean(input.scrape_permission);
+  }
 
   const profile = {
-    customer_id: "demo_customer_1",
-    supplier_id: form.get("supplier_id"),
-    name: form.get("name"),
-    status: "active",
-
-    connection_type: "google_sheet",
-    matching_key: form.get("matching_key") ?? "sku",
-
-    connection: {
-      type: "google_sheet",
-      sheet_url: form.get("sheet_url"),
-      sheet_name: form.get("sheet_name"),
-      tabs: {
-        source: form.get("sheet_name"),
-        headerRow: 1,
-        match_col: form.get("match_col"),
-        qty_col: form.get("qty_col"),
-      },
-    },
-
-    shop: {
-      domain: form.get("shop_domain"),
-      platform: "shopify",
-      access_token: form.get("access_token"),
-      location_id: form.get("location_id"),
-    },
-
-    frequency: form.get("frequency") ?? "6h",
+    customer_id: toStringValue(input.customer_id) || "demo_customer_1",
+    supplier_id: supplierId,
+    name,
+    status: toStringValue(input.status) || "active",
+    description: toStringValue(input.description) || null,
+    connection_type: connectionType,
+    matching_key: matchingKey,
+    connection,
+    shop: shopDomain
+      ? {
+          domain: shopDomain,
+          platform: "shopify",
+          access_token: accessToken || null,
+          location_id: toStringValue(input.location_id) || null,
+        }
+      : null,
+    frequency,
     notifications: {
-      mode: "critical_only",
-      email: "",
-      sms: [],
-      slack: [],
+      mode: notificationTypes.length ? "custom" : "critical_only",
+      types: notificationTypes.length ? notificationTypes : ["critical_only"],
     },
   };
+
+  if (!accessToken) {
+    return json(
+      {
+        ok: false,
+        message:
+          "Missing Shopify access token. Add SHOPIFY_ACCESS_TOKEN or send access_token in the request.",
+      },
+      { status: 400 }
+    );
+  }
+
+  const testOnly = Boolean(input.test_only);
 
   try {
     const res = await fetch(N8N_SUPPLIER_SETUP_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile }),
+      body: JSON.stringify({ profile, test_only: testOnly }),
     });
 
     if (!res.ok) {
@@ -71,7 +181,22 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    return json({ ok: true, message: "Supplier saved and tested successfully." });
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+
+    const response = data && typeof data === "object" ? (data as Record<string, unknown>) : {};
+
+    return json({
+      ok: true,
+      supplier_id: supplierId,
+      products_found: response.products_found ?? response.products ?? null,
+      matched: response.matched ?? response.matched_count ?? null,
+      message: testOnly ? "Supplier test completed." : "Supplier saved successfully.",
+    });
   } catch (err: any) {
     return json(
       { ok: false, message: `Failed to reach n8n: ${err.message ?? String(err)}` },
