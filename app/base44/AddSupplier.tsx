@@ -97,16 +97,56 @@ export default function AddSupplier() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleTestConnection = () => {
+  const handleTestConnection = async () => {
     setIsTestingConnection(true);
-    setTimeout(() => {
+    setSubmitError(null);
+    try {
+      const supplierId = formData.name ? toSupplierId(formData.name) : "supplier";
+      const shopDomain = getShopDomainFromLocation();
+      const res = await fetch("/api/supplier-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          test_only: true,
+          supplier_id: supplierId,
+          name: formData.name || "Supplier",
+          description: formData.description,
+          matching_key_type: formData.matching_key_type,
+          connection_type: formData.connection_type,
+          api_url: formData.api_url,
+          api_key: formData.api_key,
+          api_endpoint: formData.api_endpoint,
+          sheet_url: formData.sheet_url,
+          sheet_name: formData.sheet_name,
+          sheet_matching_tab: formData.sheet_matching_tab,
+          sheet_tab: formData.sheet_tab,
+          file_url: formData.file_url,
+          scrape_url: formData.scrape_url,
+          scrape_permission: formData.scrape_permission,
+          sync_frequency: formData.sync_frequency,
+          notification_types: formData.notification_types,
+          status: formData.status,
+          shop_domain: shopDomain,
+        }),
+      });
+      const data = await readJsonOrText(res);
+      if (!res.ok) {
+        setSubmitError(getErrorMessage(data) || "Test connection failed.");
+        setTestResult({ success: false, products_found: 0, matched: 0 });
+        return;
+      }
+
       setTestResult({
         success: true,
-        products_found: Math.floor(Math.random() * 50) + 50,
-        matched: Math.floor(Math.random() * 40) + 30,
+        products_found: Number((data as any)?.products_found ?? 0),
+        matched: Number((data as any)?.matched ?? (data as any)?.products_found ?? 0),
       });
+    } catch (error) {
+      setSubmitError(`Failed to reach backend: ${String(error)}`);
+      setTestResult({ success: false, products_found: 0, matched: 0 });
+    } finally {
       setIsTestingConnection(false);
-    }, 1200);
+    }
   };
 
   const toSupplierId = (name: string) => {
@@ -155,10 +195,10 @@ export default function AddSupplier() {
           shop_domain: shopDomain,
         }),
       });
-      const setupData = await setupRes.json();
+      const setupData = await readJsonOrText(setupRes);
 
       if (!setupRes.ok) {
-        setSubmitError(setupData?.message || "Failed to save supplier profile.");
+        setSubmitError(getErrorMessage(setupData) || "Failed to save supplier profile.");
         return;
       }
 
@@ -167,10 +207,10 @@ export default function AddSupplier() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ supplier_id: supplierId }),
       });
-      const data = await startRes.json();
+      const data = await readJsonOrText(startRes);
 
       if (!startRes.ok) {
-        setSubmitError(data?.message || "Failed to start sync.");
+        setSubmitError(getErrorMessage(data) || "Failed to start sync.");
         return;
       }
 
@@ -420,7 +460,7 @@ export default function AddSupplier() {
                   >
                     {isTestingConnection ? <LoaderRow label="Testing..." /> : "⚙️ Test Connection"}
                   </button>
-                  {testResult && <TestResult success={true} products={testResult.products_found} matched={testResult.matched} />}
+                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
                 </div>
               </>
             )}
@@ -448,7 +488,7 @@ export default function AddSupplier() {
                   >
                     {isTestingConnection ? <LoaderRow label="Analyzing..." /> : "⚙️ Analyze File"}
                   </button>
-                  {testResult && <TestResult success={true} products={testResult.products_found} matched={testResult.matched} />}
+                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
                   <div className="rounded-xl bg-amber-50 text-amber-800 text-sm px-4 py-3 border border-amber-200">
                     📅 Update: This connection updates only when you upload a new file.
                   </div>
@@ -479,7 +519,7 @@ export default function AddSupplier() {
                   >
                     {isTestingConnection ? <LoaderRow label="Analyzing..." /> : "⚙️ Analyze File"}
                   </button>
-                  {testResult && <TestResult success={true} products={testResult.products_found} matched={testResult.matched} />}
+                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
                   <div className="rounded-xl bg-amber-50 text-amber-800 text-sm px-4 py-3 border border-amber-200">
                     📅 Update: This connection updates only when you upload a new file.
                   </div>
@@ -817,4 +857,23 @@ function getShopDomainFromLocation() {
   } catch {
     return null;
   }
+}
+
+async function readJsonOrText(response: Response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return { message: text };
+  }
+}
+
+function getErrorMessage(data: unknown) {
+  if (!data) return null;
+  if (typeof data === "string") return data;
+  if (typeof data === "object" && "message" in data) {
+    const value = (data as { message?: unknown }).message;
+    return typeof value === "string" ? value : null;
+  }
+  return null;
 }
