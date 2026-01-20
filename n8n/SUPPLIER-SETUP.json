@@ -90,10 +90,23 @@
     },
     {
       "parameters": {
+        "jsCode": "const items = $input.all();\nconst count = items.length;\nconst profile = $('test profil').item.json.profile;\nconst test_only = $('test profil').item.json.test_only === true;\nreturn [{ json: { profile, test_only, products_found: count, matched: count } }];"
+      },
+      "id": "b97f90a6-8db1-4f7b-9b3f-03eafdbd6c1f",
+      "name": "Count Sheet Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1712,
+        816
+      ]
+    },
+    {
+      "parameters": {
         "conditions": {
           "number": [
             {
-              "value1": "={{Object.keys($json).length}}",
+              "value1": "={{$json.products_found}}",
               "operation": "larger"
             }
           ]
@@ -104,7 +117,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1824,
+        1904,
         816
       ]
     },
@@ -136,7 +149,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const profile = {\ncustomer_id: \"demo_customer_1\",\nsupplier_id: \"brandstreettokyo\",\nname: \"Brand Street Tokyo\",\nstatus: \"active\",\n\nconnection_type: \"google_sheet\",\nmatching_key: \"sku\",\n\nconnection: {\ntype: \"google_sheet\",\nsheet_url: \"https://docs.google.com/spreadsheets/d/1CdAR76Xc0fWf1txFH7lxxd6Pprz6I_3iVA2nSZN0A_E/edit?usp=sharing\",\nsheet_name: \"test\",\ntabs: {\nsource: \"test\",\nheaderRow: 1,\nmatch_col: \"A\",\nqty_col: \"B\",\n},\n},\n\nshop: {\ndomain: \"testbutik679865.myshopify.com\",\nplatform: \"shopify\",\naccess_token: \"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\",\nlocation_id: \"111849308341\",\n\n},\n\nfrequency: \"6h\",\nnotifications: {\nmode: \"critical_only\",\nemail: \"tuvaisaksen1@gmail.com\",\nsms: [],\nslack: [],\n},\n};\nreturn [{ json: { profile } }];"
+        "jsCode": "const incoming = $json ?? {};\nconst profile = incoming.profile ?? {\n  customer_id: \"demo_customer_1\",\n  supplier_id: \"brandstreettokyo\",\n  name: \"Brand Street Tokyo\",\n  status: \"active\",\n  connection_type: \"google_sheet\",\n  matching_key: \"sku\",\n  connection: {\n    type: \"google_sheet\",\n    sheet_url: \"https://docs.google.com/spreadsheets/d/1CdAR76Xc0fWf1txFH7lxxd6Pprz6I_3iVA2nSZN0A_E/edit?usp=sharing\",\n    sheet_name: \"test\",\n    tabs: {\n      source: \"test\",\n      headerRow: 1,\n      match_col: \"A\",\n      qty_col: \"B\",\n    },\n  },\n  shop: {\n    domain: \"testbutik679865.myshopify.com\",\n    platform: \"shopify\",\n    access_token: \"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\",\n    location_id: \"111849308341\",\n  },\n  frequency: \"6h\",\n  notifications: {\n    mode: \"critical_only\",\n    email: \"tuvaisaksen1@gmail.com\",\n    sms: [],\n    slack: [],\n  },\n};\nconst test_only = Boolean(incoming.test_only);\nreturn [{ json: { profile, test_only } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -146,6 +159,40 @@
       ],
       "id": "f7858118-8830-4b52-9325-a757fc4226a5",
       "name": "test profil"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "27a7a4fb-2db2-46ad-b2b4-37c9ccf4e2a7",
+              "leftValue": "={{ $json.test_only }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        1440
+      ],
+      "id": "a23b7a4e-5e0b-4c4d-8f7b-0f9c7c9c5a12",
+      "name": "Test only? (early)"
     },
     {
       "parameters": {
@@ -180,6 +227,55 @@
       ],
       "id": "afddb61c-fcb4-4aed-8f88-7f49f9f4636e",
       "name": "Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0d3866df-c3dc-4c3b-9b44-6b45db28c178",
+              "leftValue": "={{ $json.test_only }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2896,
+        1456
+      ],
+      "id": "a81e1769-6c82-4e0b-9d97-3853f45938e4",
+      "name": "Test only?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, products_found: $json.products_found, matched: $json.matched } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3168,
+        1280
+      ],
+      "id": "8d560bb5-2e10-4dd2-90c1-4b8d9c27c5c4",
+      "name": "Test Result"
     },
     {
       "parameters": {
@@ -792,6 +888,17 @@
       "main": [
         [
           {
+            "node": "Count Sheet Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count Sheet Rows": {
+      "main": [
+        [
+          {
             "node": "Sheet OK?",
             "type": "main",
             "index": 0
@@ -821,7 +928,7 @@
       "main": [
         [
           {
-            "node": "Test Shopify",
+            "node": "Test only? (early)",
             "type": "main",
             "index": 0
           },
@@ -833,8 +940,44 @@
         ]
       ]
     },
+    "Test only? (early)": {
+      "main": [
+        [
+          {
+            "node": "Test Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Test Shopify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Merge": {
       "main": [
+        [
+          {
+            "node": "Test only?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test only?": {
+      "main": [
+        [
+          {
+            "node": "Test Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Postgres_UPSERT",
