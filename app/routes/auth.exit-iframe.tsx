@@ -1,0 +1,11 @@
+import type { LoaderFunctionArgs } from "@react-router/node";
+import { authenticate } from "../shopify.server";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  await authenticate.admin(request);
+  return new Response(null, { status: 204 });
+}
+
+export default function ExitIframe() {
+  return null;
+}

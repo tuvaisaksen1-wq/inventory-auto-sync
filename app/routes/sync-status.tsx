@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@react-router/node";
-import { getLatestSyncRun } from "../server/sync.server";
+import { getLatestSyncRun, getSyncRunById } from "../server/sync.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -9,15 +9,19 @@ const json = (data: unknown, init: ResponseInit = {}) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+  const runId = url.searchParams.get("run_id");
   const supplierId = url.searchParams.get("supplier_id");
 
-  if (!supplierId) {
-    return json({ ok: false, message: "Missing supplier_id" }, { status: 400 });
+  if (!runId && !supplierId) {
+    return json(
+      { ok: false, message: "Missing run_id or supplier_id" },
+      { status: 400 }
+    );
   }
 
   let latest;
   try {
-    latest = await getLatestSyncRun(supplierId);
+    latest = runId ? await getSyncRunById(runId) : await getLatestSyncRun(supplierId as string);
   } catch (error) {
     return json(
       { ok: false, message: "Database error", error: String(error) },

@@ -1,6 +1,10 @@
 import type { ActionFunctionArgs } from "@react-router/node";
 import { triggerInventorySync } from "../server/n8n.server";
-import { getSupplierProfile } from "../server/sync.server";
+import {
+  createSyncRun,
+  getSupplierProfile,
+  setSyncRunStatus,
+} from "../server/sync.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -57,21 +61,45 @@ export async function action({ request }: ActionFunctionArgs) {
   const payload = {
     profile,
     trigger: "manual",
+    run_id: null as string | null,
   };
 
   try {
-    const n8n = await triggerInventorySync(payload);
-    if (!n8n.ok) {
+    const runId = await createSyncRun({
+      supplierId,
+      tenantId: profile.customer_id ?? null,
+      trigger: "manual",
+      status: "queued",
+    });
+
+    if (!runId) {
       return json(
-        { ok: false, message: "n8n error", n8n },
-        { status: 400 }
+        { ok: false, message: "Failed to create sync run" },
+        { status: 500 }
       );
     }
 
-    return json({ ok: true, n8n });
+    payload.run_id = runId;
+
+    void (async () => {
+      try {
+        await setSyncRunStatus(runId, "running");
+        const n8n = await triggerInventorySync(payload);
+        if (!n8n.ok) {
+          await setSyncRunStatus(runId, "failed", JSON.stringify(n8n));
+        }
+      } catch (error) {
+        await setSyncRunStatus(runId, "failed", String(error));
+      }
+    })();
+
+    return json(
+      { ok: true, run_id: runId, status: "queued" },
+      { status: 202 }
+    );
   } catch (error) {
     return json(
-      { ok: false, message: "Failed to reach n8n", error: String(error) },
+      { ok: false, message: "Database error", error: String(error) },
       { status: 500 }
     );
   }

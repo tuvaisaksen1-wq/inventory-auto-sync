@@ -215,9 +215,12 @@ export default function AddSupplier() {
       }
 
       setActiveSupplierId(supplierId);
-      setSyncRun({ status: "running" });
+      const runId = data && typeof data === "object" && "run_id" in data ? String(data.run_id ?? "") : "";
+      const nextStatus =
+        data && typeof data === "object" && "status" in data ? String(data.status ?? "queued") : "queued";
+      setSyncRun({ run_id: runId || undefined, status: nextStatus });
       setSyncStatus({
-        status: "running",
+        status: nextStatus,
         products_found: testResult?.products_found || 53,
         matched: testResult?.matched || 48,
         updated: 0,
@@ -232,12 +235,18 @@ export default function AddSupplier() {
   };
 
   React.useEffect(() => {
-    if (!activeSupplierId || syncRun?.status !== "running") return;
+    if (!activeSupplierId && !syncRun?.run_id) return;
+    if (syncRun?.status === "success" || syncRun?.status === "failed" || syncRun?.status === "partial_failed") {
+      return;
+    }
 
     let isActive = true;
     const poll = async () => {
       try {
-        const res = await fetch(`/sync-status?supplier_id=${encodeURIComponent(activeSupplierId)}`);
+        const query = syncRun?.run_id
+          ? `run_id=${encodeURIComponent(syncRun.run_id)}`
+          : `supplier_id=${encodeURIComponent(activeSupplierId as string)}`;
+        const res = await fetch(`/sync-status?${query}`);
         const data = await res.json();
         if (!isActive) return;
         if (data?.status) {
@@ -255,7 +264,7 @@ export default function AddSupplier() {
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [activeSupplierId, syncRun?.status]);
+  }, [activeSupplierId, syncRun?.run_id, syncRun?.status]);
 
   const isMatchSelected = (id: string) => formData.matching_key_type === id;
 

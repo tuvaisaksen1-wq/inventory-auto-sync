@@ -1,11 +1,15 @@
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function triggerInventorySync(payload: unknown) {
+export async function triggerInventorySync(
+  payload: unknown,
+  options: { timeoutMs?: number } = {}
+) {
   const url = process.env.N8N_INVENTORY_SYNC_URL;
   if (!url) {
     throw new Error("Missing N8N_INVENTORY_SYNC_URL");
   }
 
+  const timeoutMs = options.timeoutMs ?? 12000;
   const maxAttempts = 3;
   let attempt = 0;
   let lastError: unknown = null;
@@ -13,11 +17,15 @@ export async function triggerInventorySync(payload: unknown) {
   while (attempt < maxAttempts) {
     attempt += 1;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const text = await response.text();
       let data: unknown = text;

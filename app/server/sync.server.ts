@@ -82,6 +82,61 @@ export async function getLatestSyncRun(supplierId: string) {
   return result.rows[0] ?? null;
 }
 
+export async function getSyncRunById(runId: string) {
+  const result = await query(
+    `SELECT run_id, supplier_id, trigger, status, started_at, finished_at,
+            updated_count, skipped_count, not_found_count, error_count, error_summary
+     FROM sync_runs
+     WHERE run_id = $1
+     LIMIT 1`,
+    [runId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function createSyncRun(params: {
+  supplierId: string;
+  tenantId: string | null;
+  trigger?: string;
+  status?: string;
+}) {
+  const { supplierId, tenantId, trigger = "manual", status = "queued" } = params;
+  const result = await query(
+    `INSERT INTO sync_runs (
+       tenant_id,
+       supplier_id,
+       trigger,
+       status,
+       started_at
+     ) VALUES ($1, $2, $3, $4, now())
+     RETURNING run_id`,
+    [tenantId, supplierId, trigger, status]
+  );
+
+  return result.rows[0]?.run_id ?? null;
+}
+
+export async function setSyncRunStatus(
+  runId: string,
+  status: string,
+  errorSummary?: string
+) {
+  const shouldFinish =
+    status === "failed" || status === "partial_failed" || status === "success";
+
+  const result = await query(
+    `UPDATE sync_runs
+     SET status = $2,
+         error_summary = COALESCE($3, error_summary),
+         finished_at = CASE WHEN $4 THEN now() ELSE finished_at END
+     WHERE run_id = $1`,
+    [runId, status, errorSummary ?? null, shouldFinish]
+  );
+
+  return result.rowCount ?? 0;
+}
+
 export async function getLatestProducts(supplierId: string, limit = 500) {
   const result = await query(
     `SELECT matching_key, qty, updated_at

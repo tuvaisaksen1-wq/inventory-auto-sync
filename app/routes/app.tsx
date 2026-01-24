@@ -1,4 +1,6 @@
+import type { LoaderFunctionArgs } from "@react-router/node";
 import { Outlet, Link, useLocation } from "react-router";
+import { authenticate } from "../shopify.server";
 
 const navItems = [
   { label: "Dashboard", href: "/app" },
@@ -52,4 +54,9 @@ export default function AppLayout() {
       </main>
     </div>
   );
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  await authenticate.admin(request);
+  return null;
 }

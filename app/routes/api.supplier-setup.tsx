@@ -1,5 +1,6 @@
 
 import type { ActionFunctionArgs } from "@react-router/node";
+import { query } from "../server/db.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -58,6 +59,45 @@ function toStringArray(value: unknown) {
   return [];
 }
 
+type SessionRow = {
+  access_token: string | null;
+  shop: string;
+};
+
+async function getAccessTokenFromSession(shopDomain: string) {
+  const result = await query<SessionRow>(
+    `SELECT "accessToken" AS access_token, shop
+     FROM "Session"
+     WHERE shop = $1
+     ORDER BY "expires" DESC NULLS LAST
+     LIMIT 1`,
+    [shopDomain]
+  );
+
+  return result.rows[0]?.access_token ?? null;
+}
+
+async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
+  const url = `https://${shopDomain}/admin/api/2024-01/locations.json`;
+  const res = await fetch(url, {
+    headers: { "X-Shopify-Access-Token": accessToken },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Shopify locations error (${res.status}): ${text}`);
+  }
+
+  const data = (await res.json()) as {
+    locations?: Array<{ id: number; active?: boolean }>;
+  };
+
+  const locations = data.locations ?? [];
+  const active = locations.find((location) => location.active !== false);
+  const chosen = active ?? locations[0];
+  return chosen ? String(chosen.id) : null;
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   if (!N8N_SUPPLIER_SETUP_URL) {
     return json(
@@ -89,8 +129,11 @@ export async function action({ request }: ActionFunctionArgs) {
     toStringValue(input.sync_frequency) ||
     "6h";
   const notificationTypes = toStringArray(input.notification_types);
-  const accessToken =
+  let accessToken =
     toStringValue(input.access_token) || DEFAULT_SHOPIFY_ACCESS_TOKEN || "";
+  if (!accessToken && shopDomain) {
+    accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
+  }
 
   if (!supplierId || !name) {
     return json(
@@ -129,6 +172,34 @@ export async function action({ request }: ActionFunctionArgs) {
     connection.scrape_permission = Boolean(input.scrape_permission);
   }
 
+  const testOnly = Boolean(input.test_only);
+  if (!testOnly && !accessToken) {
+    return json(
+      {
+        ok: false,
+        message:
+          "Missing Shopify access token. Install app in store or set SHOPIFY_ACCESS_TOKEN.",
+      },
+      { status: 400 }
+    );
+  }
+
+  let locationId = toStringValue(input.location_id);
+  if (!testOnly && shopDomain && accessToken && !locationId) {
+    try {
+      locationId = (await getPrimaryLocationId(shopDomain, accessToken)) ?? "";
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          message: "Failed to fetch Shopify locations",
+          error: String(error),
+        },
+        { status: 400 }
+      );
+    }
+  }
+
   const profile = {
     customer_id: toStringValue(input.customer_id) || "demo_customer_1",
     supplier_id: supplierId,
@@ -138,12 +209,12 @@ export async function action({ request }: ActionFunctionArgs) {
     connection_type: connectionType,
     matching_key: matchingKey,
     connection,
-    shop: shopDomain
+    shop: shopDomain && !testOnly
       ? {
           domain: shopDomain,
           platform: "shopify",
           access_token: accessToken || null,
-          location_id: toStringValue(input.location_id) || null,
+          location_id: locationId || null,
         }
       : null,
     frequency,
@@ -152,19 +223,6 @@ export async function action({ request }: ActionFunctionArgs) {
       types: notificationTypes.length ? notificationTypes : ["critical_only"],
     },
   };
-
-  if (!accessToken) {
-    return json(
-      {
-        ok: false,
-        message:
-          "Missing Shopify access token. Add SHOPIFY_ACCESS_TOKEN or send access_token in the request.",
-      },
-      { status: 400 }
-    );
-  }
-
-  const testOnly = Boolean(input.test_only);
 
   try {
     const res = await fetch(N8N_SUPPLIER_SETUP_URL, {
