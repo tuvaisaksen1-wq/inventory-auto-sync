@@ -45,6 +45,9 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
+# Prisma client må genereres i runtime-image
+RUN npx prisma generate
+
 COPY . .
 COPY --from=builder /app/build ./build
 
