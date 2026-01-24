@@ -165,6 +165,13 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  if (!testOnly && !shopDomain) {
+    return json(
+      { ok: false, message: "Missing shop domain for supplier setup" },
+      { status: 400 }
+    );
+  }
+
   const connection: Record<string, unknown> = {
     type: connectionType,
   };
@@ -246,6 +253,52 @@ export async function action({ request }: ActionFunctionArgs) {
       types: notificationTypes.length ? notificationTypes : ["critical_only"],
     },
   };
+
+  if (!testOnly) {
+    const shopValue = profile.shop ? JSON.stringify(profile.shop) : "";
+    const notificationsValue = JSON.stringify(profile.notifications);
+    const connectionValue = JSON.stringify(profile.connection);
+
+    await query(
+      `INSERT INTO supplier_profiles (
+         supplier_id,
+         name,
+         status,
+         connection_type,
+         connection,
+         matching_key,
+         shop,
+         frequency,
+         notifications,
+         customer_id,
+         updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, now())
+       ON CONFLICT (supplier_id)
+       DO UPDATE SET
+         name = EXCLUDED.name,
+         status = EXCLUDED.status,
+         connection_type = EXCLUDED.connection_type,
+         connection = EXCLUDED.connection,
+         matching_key = EXCLUDED.matching_key,
+         shop = EXCLUDED.shop,
+         frequency = EXCLUDED.frequency,
+         notifications = EXCLUDED.notifications,
+         customer_id = EXCLUDED.customer_id,
+         updated_at = now()`,
+      [
+        supplierId,
+        name,
+        profile.status,
+        connectionType,
+        connectionValue,
+        matchingKey,
+        shopValue,
+        frequency,
+        notificationsValue,
+        profile.customer_id,
+      ]
+    );
+  }
 
   try {
     const res = await fetch(N8N_SUPPLIER_SETUP_URL, {
