@@ -152,6 +152,7 @@ export async function action({ request }: ActionFunctionArgs) {
     toStringValue(input.sync_frequency) ||
     "6h";
   const notificationTypes = toStringArray(input.notification_types);
+  const testOnly = Boolean(input.test_only);
   let accessToken =
     toStringValue(input.access_token) || DEFAULT_SHOPIFY_ACCESS_TOKEN || "";
   if (!accessToken && shopDomain) {
@@ -202,7 +203,6 @@ export async function action({ request }: ActionFunctionArgs) {
     connection.scrape_permission = Boolean(input.scrape_permission);
   }
 
-  const testOnly = Boolean(input.test_only);
   if (!testOnly && !accessToken) {
     return json(
       {
