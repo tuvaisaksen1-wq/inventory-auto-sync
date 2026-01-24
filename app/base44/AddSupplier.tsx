@@ -103,6 +103,7 @@ export default function AddSupplier() {
     try {
       const supplierId = formData.name ? toSupplierId(formData.name) : "supplier";
       const shopDomain = getShopDomainFromLocation();
+      const shopHost = getShopHostFromLocation();
       const res = await fetch("/api/supplier-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,6 +128,7 @@ export default function AddSupplier() {
           notification_types: formData.notification_types,
           status: formData.status,
           shop_domain: shopDomain,
+          shop_host: shopHost,
         }),
       });
       const data = await readJsonOrText(res);
@@ -170,6 +172,7 @@ export default function AddSupplier() {
     try {
       const supplierId = toSupplierId(formData.name);
       const shopDomain = getShopDomainFromLocation();
+      const shopHost = getShopHostFromLocation();
       const setupRes = await fetch("/api/supplier-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -193,6 +196,7 @@ export default function AddSupplier() {
           notification_types: formData.notification_types,
           status: formData.status,
           shop_domain: shopDomain,
+          shop_host: shopHost,
         }),
       });
       const setupData = await readJsonOrText(setupRes);
@@ -863,6 +867,16 @@ function getShopDomainFromLocation() {
   try {
     const url = new URL(window.location.href);
     return url.searchParams.get("shop");
+  } catch {
+    return null;
+  }
+}
+
+function getShopHostFromLocation() {
+  if (typeof window === "undefined") return null;
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get("host") || window.sessionStorage.getItem("shopify_host");
   } catch {
     return null;
   }

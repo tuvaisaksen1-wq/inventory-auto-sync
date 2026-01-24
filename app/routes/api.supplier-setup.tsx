@@ -98,6 +98,24 @@ async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
   return chosen ? String(chosen.id) : null;
 }
 
+function decodeShopFromHost(hostValue: string | null) {
+  if (!hostValue) return null;
+  try {
+    const decoded = Buffer.from(hostValue, "base64").toString("utf8");
+    if (decoded.includes(".myshopify.com")) {
+      return decoded.includes("://") ? new URL(decoded).hostname : decoded;
+    }
+    const url = decoded.includes("://") ? new URL(decoded) : new URL(`https://${decoded}`);
+    const match = url.pathname.match(/\/store\/([^/]+)/);
+    if (match?.[1]) {
+      return `${match[1]}.myshopify.com`;
+    }
+  } catch {
+    // ignore decode errors
+  }
+  return null;
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   if (!N8N_SUPPLIER_SETUP_URL) {
     return json(
@@ -109,10 +127,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const input = await readInput(request);
   const url = new URL(request.url);
   const headerShop = request.headers.get("X-Shopify-Shop-Domain");
+  const hostParam =
+    toStringValue(input.shop_host) ||
+    toStringValue(input.host) ||
+    url.searchParams.get("host");
   const shopDomain =
     toStringValue(input.shop_domain) ||
     headerShop ||
     url.searchParams.get("shop") ||
+    decodeShopFromHost(hostParam) ||
     null;
 
   const name = toStringValue(input.name);
