@@ -5,6 +5,11 @@ export default [
   { path: "/start-sync", file: "routes/start-sync.tsx" },
   { path: "/sync-status", file: "routes/sync-status.tsx" },
   { path: "/products/:supplier_id", file: "routes/products.$supplier_id.tsx" },
+  { path: "/auth/login", file: "routes/auth.login.tsx" },
+  { path: "/auth/session-token", file: "routes/auth.session-token.tsx" },
+  { path: "/auth/exit-iframe", file: "routes/auth.exit-iframe.tsx" },
+  { path: "/webhooks/app/uninstalled", file: "routes/webhooks.app.uninstalled.tsx" },
+  { path: "/webhooks/app/scopes_update", file: "routes/webhooks.app.scopes_update.tsx" },
   { path: "/api/supplier-setup", file: "routes/api.supplier-setup.tsx" },
   { path: "/api/suppliers/:supplier_id", file: "routes/api.suppliers.$supplier_id.tsx" },
   {
