@@ -26,6 +26,23 @@ export type SupplierProfile = {
   notifications: Record<string, unknown> | null;
 };
 
+type SyncRunSummary = Record<string, unknown>;
+
+type SyncRunRow = {
+  run_id: string;
+  supplier_id: string;
+  trigger: string | null;
+  status: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  updated_count: number | null;
+  skipped_count: number | null;
+  not_found_count: number | null;
+  error_count: number | null;
+  error_summary: unknown | null;
+  summary?: SyncRunSummary | null;
+};
+
 function normalizeJson(value: unknown) {
   if (!value) return null;
   if (typeof value === "string") {
@@ -37,6 +54,16 @@ function normalizeJson(value: unknown) {
   }
   if (typeof value === "object") {
     return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function parseSummary(value: string) {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (typeof parsed === "object" && parsed !== null) return parsed;
+  } catch {
+    /* ignore */
   }
   return null;
 }
@@ -79,7 +106,12 @@ export async function getLatestSyncRun(supplierId: string) {
     [supplierId]
   );
 
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    summary: typeof row.error_summary === "string" ? parseSummary(row.error_summary) : null,
+  };
 }
 
 export async function getSyncRunById(runId: string) {
@@ -92,7 +124,12 @@ export async function getSyncRunById(runId: string) {
     [runId]
   );
 
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    ...row,
+    summary: typeof row.error_summary === "string" ? parseSummary(row.error_summary) : null,
+  };
 }
 
 export async function createSyncRun(params: {
@@ -132,6 +169,17 @@ export async function setSyncRunStatus(
          finished_at = CASE WHEN $4 THEN now() ELSE finished_at END
      WHERE run_id = $1`,
     [runId, status, errorSummary ?? null, shouldFinish]
+  );
+
+  return result.rowCount ?? 0;
+}
+
+export async function setSyncRunSummary(runId: string, summary: Record<string, unknown>) {
+  const result = await query(
+    `UPDATE sync_runs
+     SET error_summary = $2
+     WHERE run_id = $1`,
+    [runId, JSON.stringify(summary)]
   );
 
   return result.rowCount ?? 0;

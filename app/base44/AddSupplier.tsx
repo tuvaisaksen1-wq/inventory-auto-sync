@@ -51,7 +51,50 @@ export default function AddSupplier() {
   const [step, setStep] = useState<Step>(1);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; products_found: number; matched: number } | null>(null);
-  const [syncStatus, setSyncStatus] = useState<{ status: string; products_found: number; matched: number; updated: number; next_check: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<
+    {
+      status: string;
+      products_found: number;
+      matched: number;
+      updated: number;
+      skipped: number;
+      not_found: number;
+      error_count: number;
+      message: string;
+      next_check: string;
+    } | null
+  >(null);
+
+  const applySummary = (
+    summary: Record<string, unknown> | null,
+    current: typeof syncStatus
+  ) => {
+    if (!summary) return current;
+
+    const toNumber = (value: unknown) => Number(value ?? 0);
+    const productsFound =
+      toNumber(summary.products_found ?? summary.products ?? 0) ||
+      toNumber(summary.matched_count ?? summary.matched ?? 0);
+    const matched =
+      toNumber(summary.matched ?? summary.matched_count ?? summary.updated_count ?? 0);
+    const updated = toNumber(summary.updated_count ?? 0);
+    const skipped = toNumber(summary.skipped_count ?? 0);
+    const notFound = toNumber(summary.not_found_count ?? 0);
+    const errorCount = toNumber(summary.error_count ?? 0);
+    const message = typeof summary.message === "string" ? summary.message : current?.message ?? "";
+
+    return {
+      status: current?.status ?? "queued",
+      products_found: productsFound,
+      matched,
+      updated,
+      skipped,
+      not_found: notFound,
+      error_count: errorCount,
+      message,
+      next_check: current?.next_check ?? "Tomorrow at 09:00",
+    };
+  };
   const [syncRun, setSyncRun] = useState<{
     run_id?: string;
     status: string;
@@ -223,11 +266,32 @@ export default function AddSupplier() {
       const nextStatus =
         data && typeof data === "object" && "status" in data ? String(data.status ?? "queued") : "queued";
       setSyncRun({ run_id: runId || undefined, status: nextStatus });
+      const summarySource =
+        data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+      const getNumber = (...keys: string[]) =>
+        Number(
+          keys
+            .map((key) => summarySource?.[key])
+            .find((value) => typeof value !== "undefined" && value !== null) ?? 0
+        );
+
       setSyncStatus({
         status: nextStatus,
-        products_found: testResult?.products_found || 53,
-        matched: testResult?.matched || 48,
-        updated: 0,
+        products_found:
+          getNumber("products_found", "products", "matched_count", "matched") ||
+          testResult?.products_found ||
+          0,
+        matched: getNumber("matched", "matched_count", "updated_count") || testResult?.matched || 0,
+        updated: getNumber("updated_count") || 0,
+        skipped: getNumber("skipped_count") || 0,
+        not_found: getNumber("not_found_count") || 0,
+        error_count: getNumber("error_count") || 0,
+        message:
+          typeof summarySource?.message === "string"
+            ? summarySource.message
+            : testResult?.success
+            ? "Products matched"
+            : "Sync started",
         next_check: "Tomorrow at 09:00",
       });
       setStep(7);
@@ -255,6 +319,7 @@ export default function AddSupplier() {
         if (!isActive) return;
         if (data?.status) {
           setSyncRun(data.status);
+          setSyncStatus((prev) => applySummary(data.status.summary ?? null, prev));
         }
       } catch {
         // Ignore transient errors during polling.

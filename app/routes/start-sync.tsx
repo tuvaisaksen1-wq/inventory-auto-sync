@@ -4,6 +4,7 @@ import {
   createSyncRun,
   getSupplierProfile,
   setSyncRunStatus,
+  setSyncRunSummary,
 } from "../server/sync.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
@@ -85,10 +86,25 @@ export async function action({ request }: ActionFunctionArgs) {
       try {
         await setSyncRunStatus(runId, "running");
         const n8n = await triggerInventorySync(payload);
-        if (!n8n.ok) {
-          await setSyncRunStatus(runId, "failed", JSON.stringify(n8n));
+
+        if (n8n.ok) {
+          const summarySource =
+            Array.isArray(n8n.data) && n8n.data.length > 0 ? n8n.data[0] : n8n.data;
+          if (summarySource && typeof summarySource === "object") {
+            await setSyncRunSummary(runId, summarySource as Record<string, unknown>);
+          }
+          await setSyncRunStatus(runId, "success");
+        } else {
+          await setSyncRunSummary(
+            runId,
+            typeof n8n.data === "object" && n8n.data !== null
+              ? (n8n.data as Record<string, unknown>)
+              : { error: n8n.data ?? `HTTP ${n8n.status}` }
+          );
+          await setSyncRunStatus(runId, "failed", JSON.stringify(n8n.data ?? n8n.status));
         }
       } catch (error) {
+        await setSyncRunSummary(runId, { error: String(error) });
         await setSyncRunStatus(runId, "failed", String(error));
       }
     })();
