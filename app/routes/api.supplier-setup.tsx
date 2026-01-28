@@ -327,9 +327,12 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({
       ok: true,
       supplier_id: supplierId,
+      ...response,
       products_found: response.products_found ?? response.products ?? null,
       matched: response.matched ?? response.matched_count ?? null,
-      message: testOnly ? "Supplier test completed." : "Supplier saved successfully.",
+      message:
+        response.message ??
+        (testOnly ? "Supplier test completed." : "Supplier saved successfully."),
     });
   } catch (err: any) {
     return json(
