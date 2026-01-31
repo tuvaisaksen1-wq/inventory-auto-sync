@@ -1,6 +1,7 @@
 
 import type { ActionFunctionArgs } from "@react-router/node";
 import { query } from "../server/db.server";
+import { computeNextRunAt } from "../server/sync.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -149,9 +150,10 @@ export async function action({ request }: ActionFunctionArgs) {
     toStringValue(input.connection_type) || "google_sheet";
   const frequency =
     toStringValue(input.frequency) ||
-    toStringValue(input.sync_frequency) ||
-    "6h";
+    "sheet";
+  const syncFrequency = toStringValue(input.sync_frequency) || "6h";
   const notificationTypes = toStringArray(input.notification_types);
+  const nextRunAt = computeNextRunAt(syncFrequency);
   const testOnly = Boolean(input.test_only);
   let accessToken =
     toStringValue(input.access_token) || DEFAULT_SHOPIFY_ACCESS_TOKEN || "";
@@ -254,7 +256,7 @@ export async function action({ request }: ActionFunctionArgs) {
     },
   };
 
-  if (!testOnly) {
+    if (!testOnly) {
     const shopValue = profile.shop ? JSON.stringify(profile.shop) : "";
     const notificationsValue = JSON.stringify(profile.notifications);
     const connectionValue = JSON.stringify(profile.connection);
@@ -271,8 +273,10 @@ export async function action({ request }: ActionFunctionArgs) {
          frequency,
          notifications,
          customer_id,
-         updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, now())
+        sync_frequency,
+        next_run_at,
+        updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, now())
        ON CONFLICT (supplier_id)
        DO UPDATE SET
          name = EXCLUDED.name,
@@ -284,6 +288,8 @@ export async function action({ request }: ActionFunctionArgs) {
          frequency = EXCLUDED.frequency,
          notifications = EXCLUDED.notifications,
          customer_id = EXCLUDED.customer_id,
+         sync_frequency = EXCLUDED.sync_frequency,
+         next_run_at = EXCLUDED.next_run_at,
          updated_at = now()`,
       [
         supplierId,
@@ -296,6 +302,8 @@ export async function action({ request }: ActionFunctionArgs) {
         frequency,
         notificationsValue,
         profile.customer_id,
+        syncFrequency,
+        nextRunAt.toISOString(),
       ]
     );
   }

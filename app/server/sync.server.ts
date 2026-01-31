@@ -11,6 +11,8 @@ type SupplierProfileRow = {
   shop: unknown | null;
   frequency: string | null;
   notifications: unknown | null;
+  sync_frequency: string | null;
+  next_run_at: string | null;
 };
 
 export type SupplierProfile = {
@@ -24,6 +26,8 @@ export type SupplierProfile = {
   shop: Record<string, unknown> | null;
   frequency: string | null;
   notifications: Record<string, unknown> | null;
+  sync_frequency: string | null;
+  next_run_at: string | null;
 };
 
 type SyncRunSummary = Record<string, unknown>;
@@ -40,7 +44,8 @@ type SyncRunRow = {
   not_found_count: number | null;
   error_count: number | null;
   error_summary: unknown | null;
-  summary?: SyncRunSummary | null;
+  summary: SyncRunSummary | null;
+  next_run_at: string | null;
 };
 
 function normalizeJson(value: unknown) {
@@ -58,7 +63,7 @@ function normalizeJson(value: unknown) {
   return null;
 }
 
-function parseSummary(value: string) {
+export function parseSummary(value: string) {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
     if (typeof parsed === "object" && parsed !== null) return parsed;
@@ -71,7 +76,7 @@ function parseSummary(value: string) {
 export async function getSupplierProfile(supplierId: string) {
   const result = await query<SupplierProfileRow>(
     `SELECT customer_id, supplier_id, name, status, connection_type, matching_key,
-            connection, shop, frequency, notifications
+            connection, shop, frequency, notifications, sync_frequency, next_run_at
      FROM supplier_profiles
      WHERE supplier_id = $1
      LIMIT 1`,
@@ -91,17 +96,31 @@ export async function getSupplierProfile(supplierId: string) {
     connection: normalizeJson(row.connection),
     shop: normalizeJson(row.shop),
     frequency: row.frequency,
-    notifications: normalizeJson(row.notifications),
+            notifications: normalizeJson(row.notifications),
+            sync_frequency: row.sync_frequency,
+            next_run_at: row.next_run_at,
   } satisfies SupplierProfile;
+}
+
+export async function updateSupplierNextRun(supplierId: string, nextRunAt: Date) {
+  const result = await query(
+    `UPDATE supplier_profiles
+     SET next_run_at = $2
+     WHERE supplier_id = $1`,
+    [supplierId, nextRunAt.toISOString()]
+  );
+  return result.rowCount ?? 0;
 }
 
 export async function getLatestSyncRun(supplierId: string) {
   const result = await query(
-    `SELECT run_id, supplier_id, trigger, status, started_at, finished_at,
-            updated_count, skipped_count, not_found_count, error_count, error_summary
-     FROM sync_runs
-     WHERE supplier_id = $1
-     ORDER BY started_at DESC NULLS LAST, run_id DESC
+    `SELECT sr.run_id, sr.supplier_id, sr.trigger, sr.status, sr.started_at, sr.finished_at,
+            sr.updated_count, sr.skipped_count, sr.not_found_count, sr.error_count, sr.error_summary,
+            sr.summary, sp.next_run_at
+     FROM sync_runs sr
+     LEFT JOIN supplier_profiles sp ON sp.supplier_id = sr.supplier_id
+     WHERE sr.supplier_id = $1
+     ORDER BY sr.started_at DESC NULLS LAST, sr.run_id DESC
      LIMIT 1`,
     [supplierId]
   );
@@ -110,16 +129,19 @@ export async function getLatestSyncRun(supplierId: string) {
   if (!row) return null;
   return {
     ...row,
-    summary: typeof row.error_summary === "string" ? parseSummary(row.error_summary) : null,
+    summary: typeof row.summary === "object" && row.summary !== null ? row.summary : null,
+    next_run_at: row.next_run_at,
   };
 }
 
 export async function getSyncRunById(runId: string) {
   const result = await query(
-    `SELECT run_id, supplier_id, trigger, status, started_at, finished_at,
-            updated_count, skipped_count, not_found_count, error_count, error_summary
-     FROM sync_runs
-     WHERE run_id = $1
+    `SELECT sr.run_id, sr.supplier_id, sr.trigger, sr.status, sr.started_at, sr.finished_at,
+            sr.updated_count, sr.skipped_count, sr.not_found_count, sr.error_count, sr.error_summary,
+            sr.summary, sp.next_run_at
+     FROM sync_runs sr
+     LEFT JOIN supplier_profiles sp ON sp.supplier_id = sr.supplier_id
+     WHERE sr.run_id = $1
      LIMIT 1`,
     [runId]
   );
@@ -128,7 +150,8 @@ export async function getSyncRunById(runId: string) {
   if (!row) return null;
   return {
     ...row,
-    summary: typeof row.error_summary === "string" ? parseSummary(row.error_summary) : null,
+    summary: typeof row.summary === "object" && row.summary !== null ? row.summary : null,
+    next_run_at: row.next_run_at,
   };
 }
 
@@ -177,12 +200,24 @@ export async function setSyncRunStatus(
 export async function setSyncRunSummary(runId: string, summary: Record<string, unknown>) {
   const result = await query(
     `UPDATE sync_runs
-     SET error_summary = $2
+     SET summary = $2
      WHERE run_id = $1`,
     [runId, JSON.stringify(summary)]
   );
 
   return result.rowCount ?? 0;
+}
+
+export function computeNextRunAt(frequency: string | null) {
+  const now = new Date();
+  const map: Record<string, number> = {
+    hourly: 60,
+    "6h": 6 * 60,
+    "12h": 12 * 60,
+    daily: 24 * 60,
+  };
+  const minutes = map[frequency ?? "6h"] ?? 6 * 60;
+  return new Date(now.getTime() + minutes * 60 * 1000);
 }
 
 export async function getLatestProducts(supplierId: string, limit = 500) {

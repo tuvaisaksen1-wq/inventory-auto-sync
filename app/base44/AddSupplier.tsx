@@ -65,10 +65,10 @@ export default function AddSupplier() {
     } | null
   >(null);
 
-  const applySummary = (
-    summary: Record<string, unknown> | null,
-    current: typeof syncStatus
-  ) => {
+const applySummary = (
+  summary: Record<string, unknown> | null,
+  current: typeof syncStatus
+) => {
     if (!summary) return current;
 
     const toNumber = (value: unknown) => Number(value ?? 0);
@@ -82,6 +82,21 @@ export default function AddSupplier() {
     const notFound = toNumber(summary.not_found_count ?? 0);
     const errorCount = toNumber(summary.error_count ?? 0);
     const message = typeof summary.message === "string" ? summary.message : current?.message ?? "";
+    const formatDate = (value: unknown) => {
+      if (typeof value === "string") {
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) {
+          return date.toLocaleString();
+        }
+        return value;
+      }
+      return null;
+    };
+    const nextCheck =
+      formatDate(summary.next_check) ??
+      formatDate(summary.next_run_at) ??
+      current?.next_check ??
+      "Tomorrow at 09:00";
 
     return {
       status: current?.status ?? "queued",
@@ -92,7 +107,7 @@ export default function AddSupplier() {
       not_found: notFound,
       error_count: errorCount,
       message,
-      next_check: current?.next_check ?? "Tomorrow at 09:00",
+      next_check: nextCheck,
     };
   };
   const [syncRun, setSyncRun] = useState<{
@@ -123,7 +138,7 @@ export default function AddSupplier() {
     file_url: "",
     scrape_url: "",
     scrape_permission: false,
-    sync_frequency: "daily",
+    sync_frequency: "6h",
     notification_types: ["critical_only"] as string[],
     status: "active",
   });
@@ -275,6 +290,10 @@ export default function AddSupplier() {
             .find((value) => typeof value !== "undefined" && value !== null) ?? 0
         );
 
+      const initialNextCheck =
+        summarySource?.next_check ??
+        (typeof summarySource?.next_run_at === "string" ? summarySource.next_run_at : null);
+
       setSyncStatus({
         status: nextStatus,
         products_found:
@@ -292,7 +311,10 @@ export default function AddSupplier() {
             : testResult?.success
             ? "Products matched"
             : "Sync started",
-        next_check: "Tomorrow at 09:00",
+        next_check:
+          typeof initialNextCheck === "string"
+            ? initialNextCheck
+            : "Tomorrow at 09:00",
       });
       setStep(7);
     } catch (error) {
@@ -316,11 +338,14 @@ export default function AddSupplier() {
           : `supplier_id=${encodeURIComponent(activeSupplierId as string)}`;
         const res = await fetch(`/sync-status?${query}`);
         const data = await res.json();
-        if (!isActive) return;
-        if (data?.status) {
-          setSyncRun(data.status);
-          setSyncStatus((prev) => applySummary(data.status.summary ?? null, prev));
-        }
+    if (!isActive) return;
+    if (data?.status) {
+      setSyncRun({
+        run_id: data?.run_id ?? syncRun?.run_id,
+        status: String(data.status),
+      });
+      setSyncStatus((prev) => applySummary((data as any).summary ?? null, prev));
+    }
       } catch {
         // Ignore transient errors during polling.
       }
@@ -635,8 +660,9 @@ export default function AddSupplier() {
                   <Select
                     label="How often should we check for changes?"
                     options={[
-                      { label: "Every 6 hours", value: "6hours" },
-                      { label: "Every 12 hours", value: "12hours" },
+                      { label: "Every hour", value: "hourly" },
+                      { label: "Every 6 hours", value: "6h" },
+                      { label: "Every 12 hours", value: "12h" },
                       { label: "Daily", value: "daily" },
                     ]}
                     value={formData.sync_frequency}

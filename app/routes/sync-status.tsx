@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@react-router/node";
-import { getLatestSyncRun, getSyncRunById } from "../server/sync.server";
+import { getLatestSyncRun, getSyncRunById, parseSummary } from "../server/sync.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -30,8 +30,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   if (!latest) {
-    return json({ ok: true, status: null });
+    return json({ ok: true, status: null, summary: null });
   }
 
-  return json({ ok: true, status: latest });
+  let summary: Record<string, unknown> | null = null;
+  if (latest.summary && typeof latest.summary === "object") {
+    summary = latest.summary;
+  } else if (latest.error_summary) {
+    if (typeof latest.error_summary === "string") {
+      summary = parseSummary(latest.error_summary);
+    } else if (typeof latest.error_summary === "object") {
+      summary = latest.error_summary as Record<string, unknown>;
+    }
+  }
+
+  return json({
+    ok: true,
+    status: latest.status ?? "unknown",
+    run_id: latest.run_id,
+    supplier_id: latest.supplier_id,
+    trigger: latest.trigger,
+    started_at: latest.started_at,
+    finished_at: latest.finished_at,
+    updated_count: latest.updated_count ?? 0,
+    skipped_count: latest.skipped_count ?? 0,
+    not_found_count: latest.not_found_count ?? 0,
+    error_count: latest.error_count ?? 0,
+    summary,
+    next_run_at: latest.next_run_at,
+    next_check: summary?.next_check ?? latest.next_run_at ?? null,
+  });
 }

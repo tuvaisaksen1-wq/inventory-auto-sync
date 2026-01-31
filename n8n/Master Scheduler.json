@@ -4,7 +4,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT supplier_id, name, status, connection_type, connection, matching_key, shop, frequency\nFROM supplier_profiles\nWHERE status = 'active';",
+        "query": "SELECT supplier_id, name, status, connection_type, connection, matching_key, shop, frequency, sync_frequency, next_run_at\nFROM supplier_profiles\nWHERE status = 'active'\nAND next_run_at <= now();",
         "options": {}
       },
       "name": "Get Active Suppliers",

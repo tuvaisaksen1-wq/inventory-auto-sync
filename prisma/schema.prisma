@@ -7,6 +7,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model SupplierProfile {
+  supplier_id     String    @id @map("supplier_id")
+  customer_id     String?   @map("customer_id")
+  name            String?   @map("name")
+  status          String?   @map("status")
+  connection_type String?   @map("connection_type")
+  connection      Json?     @map("connection")
+  matching_key    String?   @map("matching_key")
+  shop            Json?     @map("shop")
+  frequency       String?   @map("frequency")
+  notifications   Json?     @map("notifications")
+  sync_frequency  String    @default("6h") @map("sync_frequency")
+  next_run_at     DateTime  @default(now()) @map("next_run_at")
+  updated_at      DateTime  @default(now()) @map("updated_at")
+
+  sync_runs       SyncRun[]
+
+  @@map("supplier_profiles")
+}
+
+model SyncRun {
+  run_id       String   @id @default(dbgenerated("gen_random_uuid()")) @map("run_id")
+  tenant_id    String   @map("tenant_id")
+  supplier_id  String   @map("supplier_id")
+  trigger      String   @map("trigger")
+  status       String   @map("status")
+  started_at   DateTime @default(now()) @map("started_at")
+  finished_at  DateTime? @map("finished_at")
+  updated_count Int     @default(0) @map("updated_count")
+  skipped_count Int     @default(0) @map("skipped_count")
+  not_found_count Int   @default(0) @map("not_found_count")
+  error_count  Int      @default(0) @map("error_count")
+  error_summary Json?   @map("error_summary")
+  summary      Json?    @map("summary")
+  supplier     SupplierProfile @relation(fields: [supplier_id], references: [supplier_id])
+
+  @@map("sync_runs")
+  @@index([status], name: "idx_sync_runs_status")
+  @@index([tenant_id, supplier_id, started_at], name: "idx_sync_runs_supplier_started")
+}
+
 model Session {
   id            String    @id
   shop          String
@@ -26,4 +67,3 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
-

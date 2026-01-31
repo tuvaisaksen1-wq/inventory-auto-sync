@@ -5,6 +5,8 @@ import {
   getSupplierProfile,
   setSyncRunStatus,
   setSyncRunSummary,
+  updateSupplierNextRun,
+  computeNextRunAt,
 } from "../server/sync.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
@@ -28,7 +30,7 @@ async function readSupplierId(request: Request) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  if (request.method !== "POST") {
+    if (request.method !== "POST") {
     return json({ ok: false, message: "Method not allowed" }, { status: 405 });
   }
 
@@ -87,24 +89,34 @@ export async function action({ request }: ActionFunctionArgs) {
         await setSyncRunStatus(runId, "running");
         const n8n = await triggerInventorySync(payload);
 
+        const summarySource =
+          Array.isArray(n8n.data) && n8n.data.length > 0 ? n8n.data[0] : n8n.data;
+        const frequency = profile.sync_frequency ?? profile.frequency ?? "6h";
+        const nextRunAt = computeNextRunAt(frequency);
+        const summary =
+          summarySource && typeof summarySource === "object"
+            ? ({
+                run_id: runId,
+                next_check: nextRunAt.toISOString(),
+                next_run_at: nextRunAt.toISOString(),
+                ...summarySource,
+              } as Record<string, unknown>)
+            : {
+                run_id: runId,
+                next_check: nextRunAt.toISOString(),
+                next_run_at: nextRunAt.toISOString(),
+              };
+
+        await setSyncRunSummary(runId, summary);
+
         if (n8n.ok) {
-          const summarySource =
-            Array.isArray(n8n.data) && n8n.data.length > 0 ? n8n.data[0] : n8n.data;
-          if (summarySource && typeof summarySource === "object") {
-            await setSyncRunSummary(runId, summarySource as Record<string, unknown>);
-          }
           await setSyncRunStatus(runId, "success");
+          await updateSupplierNextRun(supplierId, nextRunAt);
         } else {
-          await setSyncRunSummary(
-            runId,
-            typeof n8n.data === "object" && n8n.data !== null
-              ? (n8n.data as Record<string, unknown>)
-              : { error: n8n.data ?? `HTTP ${n8n.status}` }
-          );
-          await setSyncRunStatus(runId, "failed", JSON.stringify(n8n.data ?? n8n.status));
+          await setSyncRunStatus(runId, "failed", JSON.stringify(summary));
         }
       } catch (error) {
-        await setSyncRunSummary(runId, { error: String(error) });
+        await setSyncRunSummary(runId, { run_id: runId, error: String(error) });
         await setSyncRunStatus(runId, "failed", String(error));
       }
     })();

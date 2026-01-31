@@ -37,6 +37,7 @@ skipped_count int4 DEFAULT 0 NOT NULL,
 not_found_count int4 DEFAULT 0 NOT NULL,
 error_count int4 DEFAULT 0 NOT NULL,
 error_summary jsonb NULL,
+summary jsonb NULL,
 CONSTRAINT sync_runs_pkey PRIMARY KEY (run_id)
 );
 CREATE INDEX idx_sync_runs_status ON public.sync_runs USING btree (status);
