@@ -19,6 +19,14 @@ export const links: LinksFunction = () => [
   { rel: "stylesheet", href: tailwindStyles },
 ];
 
+export function headers() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
@@ -46,7 +54,6 @@ export default function App() {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
     const hostFromUrl = searchParams.get("host");
-    const storedHost = window.sessionStorage.getItem("shopify_host");
     if (hostFromUrl) {
       window.sessionStorage.setItem("shopify_host", hostFromUrl);
       return;
@@ -57,12 +64,6 @@ export default function App() {
       url.searchParams.set("embedded", "1");
       window.history.replaceState({}, "", url.toString());
       return;
-    }
-    if (storedHost) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("host", storedHost);
-      url.searchParams.set("embedded", "1");
-      window.history.replaceState({}, "", url.toString());
     }
   }, [location.search]);
 
