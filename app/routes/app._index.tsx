@@ -1,42 +1,56 @@
+import type { LoaderFunctionArgs } from "@react-router/node";
 import { useLoaderData } from "react-router";
+import { authenticate } from "../shopify.server";
 import Dashboard from "../base44/Dashboard";
-import { getRecentActivity, getRecentProducts, getSuppliers } from "../server/sync.server";
+import {
+  getRecentActivity,
+  getRecentProducts,
+  getSuppliers,
+} from "../server/sync.server";
 
-const json = (data: unknown, init: ResponseInit = {}) => {
-  const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
-  return new Response(JSON.stringify(data), { ...init, headers });
-};
+export async function loader({ request }: LoaderFunctionArgs) {
+  // Viktig: sikrer Shopify-session på /app
+  await authenticate.admin(request);
 
-export async function loader() {
   try {
     const [suppliers, products, activity] = await Promise.all([
       getSuppliers(),
       getRecentProducts(),
       getRecentActivity(),
     ]);
-    return json({ ok: true, suppliers, products, activity });
+
+    // ✅ RETURNER DATA DIREKTE
+    return {
+      suppliers,
+      products,
+      activity,
+    };
   } catch (error) {
-    return json(
-      {
-        ok: false,
-        suppliers: [],
-        products: [],
-        activity: [],
-        message: "Database error",
-        error: String(error),
-      },
-      { status: 500 }
-    );
+    console.error("Dashboard loader error:", error);
+
+    return {
+      suppliers: [],
+      products: [],
+      activity: [],
+      error: "Database error",
+    };
   }
 }
 
-export default function Index() {
+export default function AppIndex() {
   const data = useLoaderData() as {
-    ok: boolean;
-    suppliers: Array<any>;
-    products: Array<any>;
-    activity: Array<any>;
+    suppliers: any[];
+    products: any[];
+    activity: any[];
+    error?: string;
   };
-  return <Dashboard suppliers={data.suppliers} products={data.products} activity={data.activity} />;
+
+  return (
+    <Dashboard
+      suppliers={data.suppliers}
+      products={data.products}
+      activity={data.activity}
+      error={data.error}
+    />
+  );
 }
