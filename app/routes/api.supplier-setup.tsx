@@ -10,7 +10,6 @@ const json = (data: unknown, init: ResponseInit = {}) => {
 };
 
 const N8N_SUPPLIER_SETUP_URL = process.env.N8N_SUPPLIER_SETUP_URL;
-const DEFAULT_SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 
 type RawInput = Record<string, unknown>;
 
@@ -117,6 +116,23 @@ function decodeShopFromHost(hostValue: string | null) {
   return null;
 }
 
+function decodeShopFromIdToken(token: string | null) {
+  if (!token) return null;
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const payloadJson = Buffer.from(normalized, "base64").toString("utf8");
+    const payload = JSON.parse(payloadJson) as { dest?: unknown };
+    const dest = typeof payload.dest === "string" ? payload.dest : "";
+    if (!dest) return null;
+    const hostname = new URL(dest).hostname;
+    return hostname.endsWith(".myshopify.com") ? hostname : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   if (!N8N_SUPPLIER_SETUP_URL) {
     return json(
@@ -138,6 +154,11 @@ export async function action({ request }: ActionFunctionArgs) {
     headerShop ||
     url.searchParams.get("shop") ||
     decodeShopFromHost(hostParam) ||
+    decodeShopFromIdToken(
+      request.headers.get("authorization")?.toLowerCase().startsWith("bearer ")
+        ? request.headers.get("authorization")?.slice(7) ?? null
+        : null
+    ) ||
     null;
 
   const name = toStringValue(input.name);
@@ -156,8 +177,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const notificationTypes = toStringArray(input.notification_types);
   const nextRunAt = computeNextRunAt(syncFrequency);
   const testOnly = Boolean(input.test_only);
-  let accessToken =
-    toStringValue(input.access_token) || DEFAULT_SHOPIFY_ACCESS_TOKEN || "";
+  // Prefer explicit token, then shop-scoped session token.
+  let accessToken = toStringValue(input.access_token);
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
   }
@@ -217,19 +238,18 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  let locationId = toStringValue(input.location_id);
+  let locationId =
+    toStringValue(input.location_id) ||
+    toStringValue(input.api_location_id) ||
+    toStringValue(input.shop_location_id);
+  let locationWarning: string | null = null;
   if (!testOnly && shopDomain && accessToken && !locationId) {
     try {
       locationId = (await getPrimaryLocationId(shopDomain, accessToken)) ?? "";
     } catch (error) {
-      return json(
-        {
-          ok: false,
-          message: "Failed to fetch Shopify locations",
-          error: String(error),
-        },
-        { status: 400 }
-      );
+      // Do not block supplier setup on location lookup failures.
+      locationWarning = `Failed to fetch Shopify locations (${String(error)})`;
+      locationId = "";
     }
   }
 
@@ -339,13 +359,18 @@ export async function action({ request }: ActionFunctionArgs) {
       ...response,
       products_found: response.products_found ?? response.products ?? null,
       matched: response.matched ?? response.matched_count ?? null,
+      warning: locationWarning,
       message:
         response.message ??
         (testOnly ? "Supplier test completed." : "Supplier saved successfully."),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message =
+      err && typeof err === "object" && "message" in err
+        ? String((err as { message?: unknown }).message ?? String(err))
+        : String(err);
     return json(
-      { ok: false, message: `Failed to reach n8n: ${err.message ?? String(err)}` },
+      { ok: false, message: `Failed to reach n8n: ${message}` },
       { status: 500 }
     );
   }
