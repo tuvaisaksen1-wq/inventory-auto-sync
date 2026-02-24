@@ -92,7 +92,7 @@ export default function Products({
   initialSupplierId?: string | null;
   suppliers?: Array<{ id: string; name: string }>;
 }) {
-  const [products, setProducts] = useState<Product[]>(() => {
+  const [products] = useState<Product[]>(() => {
     if (!initialProducts) return mockProducts;
     return initialProducts.map((p) => ({
       id: p.matching_key,
@@ -104,9 +104,6 @@ export default function Products({
       status: p.status === "in_stock" ? "synced" : "out_of_sync",
     }));
   });
-  const [supplierInput, setSupplierInput] = useState(initialSupplierId ?? "");
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -116,39 +113,6 @@ export default function Products({
     const fromProducts = products.map((p) => p.supplier_name);
     return Array.from(new Set([...fromDb, ...fromProducts])).filter(Boolean);
   }, [products, suppliers]);
-
-  const handleLoad = async () => {
-    if (!supplierInput.trim()) {
-      setLoadError("Add a supplier id to load products.");
-      return;
-    }
-
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      const res = await fetch(`/products/${encodeURIComponent(supplierInput.trim())}`);
-      const data = await res.json();
-      if (!res.ok || !data?.ok) {
-        setLoadError(data?.message || "Failed to load products.");
-        return;
-      }
-      const next = (data.products || []).map((p: any) => ({
-        id: p.matching_key,
-        name: p.matching_key,
-        supplier_name: supplierInput.trim(),
-        sku: p.matching_key,
-        stock: Number(p.qty ?? 0),
-        last_sync: p.updated_at ?? null,
-        status: p.status === "in_stock" ? "synced" : "out_of_sync",
-      }));
-      setProducts(next);
-      setSupplierFilter("all");
-    } catch (error) {
-      setLoadError(`Failed to reach backend: ${String(error)}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -168,26 +132,6 @@ export default function Products({
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Products</h1>
         <p className="text-slate-500">{products.length} products synced</p>
-      </div>
-
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-4 flex flex-col gap-3">
-        <div className="text-sm font-semibold text-slate-700">Load products by supplier id</div>
-        <div className="flex flex-wrap gap-3 items-center">
-          <input
-            placeholder="supplier_id (e.g., brandstreettokyo)"
-            value={supplierInput}
-            onChange={(e) => setSupplierInput(e.target.value)}
-            className="flex-1 min-w-[240px] rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-          />
-          <button
-            onClick={handleLoad}
-            disabled={isLoading}
-            className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold shadow"
-          >
-            {isLoading ? "Loading..." : "Load"}
-          </button>
-        </div>
-        {loadError ? <p className="text-sm text-rose-600">{loadError}</p> : null}
       </div>
 
       {/* Filters */}

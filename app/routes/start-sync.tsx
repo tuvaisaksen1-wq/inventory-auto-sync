@@ -30,7 +30,7 @@ async function readSupplierId(request: Request) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-    if (request.method !== "POST") {
+  if (request.method !== "POST") {
     return json({ ok: false, message: "Method not allowed" }, { status: 405 });
   }
 
@@ -84,47 +84,76 @@ export async function action({ request }: ActionFunctionArgs) {
 
     payload.run_id = runId;
 
+    // Fire-and-forget background job
     void (async () => {
       try {
         await setSyncRunStatus(runId, "running");
+
         const n8n = await triggerInventorySync(payload);
 
-        const summarySource =
-          Array.isArray(n8n.data) && n8n.data.length > 0 ? n8n.data[0] : n8n.data;
+        console.log("start-sync body", {
+          frequency: profile.sync_frequency,
+          payload,
+        });
+        console.log("n8n raw", n8n);
+
+        // Robust: n8n.data can be array/object/null
+        const summarySource = Array.isArray(n8n.data)
+          ? (n8n.data[0] ?? {})
+          : (n8n.data ?? {});
+
         const frequency = profile.sync_frequency ?? profile.frequency ?? "6h";
         const nextRunAt = computeNextRunAt(frequency);
+
+        const statusValue =
+          summarySource && typeof summarySource === "object"
+            ? (summarySource as any).status
+            : null;
+
         const summary =
           summarySource && typeof summarySource === "object"
             ? ({
+                ...summarySource,
                 run_id: runId,
+                status: statusValue ?? (n8n.ok ? "success" : "failed"),
                 next_check: nextRunAt.toISOString(),
                 next_run_at: nextRunAt.toISOString(),
-                ...summarySource,
+
+                // Debug fields (remove later if you want)
+                frequency_used: frequency,
+                sync_frequency_in_profile: profile.sync_frequency,
+                requested_frequency: profile.sync_frequency ?? null,
               } as Record<string, unknown>)
             : {
                 run_id: runId,
+                status: n8n.ok ? "success" : "failed",
                 next_check: nextRunAt.toISOString(),
                 next_run_at: nextRunAt.toISOString(),
+
+                // Debug fields (remove later if you want)
+                frequency_used: frequency,
+                requested_frequency: profile.sync_frequency ?? null,
               };
 
+        // Save summary FIRST (so /sync-status can show counts)
         await setSyncRunSummary(runId, summary);
 
+        // Then set final status (does not touch summary in your sync.server.ts)
         if (n8n.ok) {
           await setSyncRunStatus(runId, "success");
-          await updateSupplierNextRun(supplierId, nextRunAt);
         } else {
           await setSyncRunStatus(runId, "failed", JSON.stringify(summary));
         }
+
+        // Persist supplier next_run_at for scheduler / list views
+        await updateSupplierNextRun(supplierId, nextRunAt);
       } catch (error) {
         await setSyncRunSummary(runId, { run_id: runId, error: String(error) });
         await setSyncRunStatus(runId, "failed", String(error));
       }
     })();
 
-    return json(
-      { ok: true, run_id: runId, status: "queued" },
-      { status: 202 }
-    );
+    return json({ ok: true, run_id: runId, status: "queued" }, { status: 202 });
   } catch (error) {
     return json(
       { ok: false, message: "Database error", error: String(error) },

@@ -1,2 +1,11 @@
-import Suppliers from "../Pages/Suppliers";
-export default Suppliers;
+import { redirect } from "react-router";
+import type { LoaderFunctionArgs } from "@react-router/node";
+
+export function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  return redirect(`/app/suppliers${url.search}`);
+}
+
+export default function SuppliersLegacyRedirect() {
+  return null;
+}

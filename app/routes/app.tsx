@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "@react-router/node";
-import { Outlet, Link, useLocation } from "react-router";
+import { Outlet, redirect, useLocation } from "react-router";
+import { NavMenu } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
 const navItems = [
@@ -10,8 +11,36 @@ const navItems = [
   { label: "Settings", href: "/app/settings" },
 ];
 
+function resolveBuildFingerprint() {
+  return (
+    process.env.RAILWAY_DEPLOYMENT_ID ||
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.BUILD_TIME ||
+    process.env.GIT_COMMIT ||
+    process.env.SOURCE_VERSION ||
+    "dev"
+  );
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  await authenticate.admin(request);
+
+  const url = new URL(request.url);
+  const fingerprint = resolveBuildFingerprint();
+  const currentVersion = url.searchParams.get("v");
+
+  // Cache-buster: tving Shopify til å laste riktig build
+  if (currentVersion !== fingerprint) {
+    url.searchParams.set("v", fingerprint);
+    return redirect(`${url.pathname}?${url.searchParams.toString()}`);
+  }
+
+  return null;
+}
+
 export default function AppLayout() {
   const location = useLocation();
+
   const withSearch = (pathname: string) => ({
     pathname,
     search: location.search,
@@ -19,44 +48,26 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200/70">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
-          <div className="text-lg font-bold text-slate-900">
-            STOCK<span className="text-blue-500">SYNC</span>
-          </div>
-          <nav className="flex items-center gap-2 text-sm">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  to={withSearch(item.href)}
-                  className={`px-3 py-2 rounded-lg font-medium transition-colors ${
-                    isActive ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="flex-1" />
-          <Link
-            to={withSearch("/app/suppliers/new")}
-            className="rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-3 py-2 text-sm font-semibold shadow"
-          >
-            + Add Supplier
-          </Link>
-        </div>
-      </header>
+      <NavMenu>
+        <a href={`${withSearch("/app").pathname}${withSearch("/app").search}`} rel="home">
+          Dashboard
+        </a>
+
+        {navItems
+          .filter((item) => item.href !== "/app")
+          .map((item) => (
+            <a
+              key={item.href}
+              href={`${withSearch(item.href).pathname}${withSearch(item.href).search}`}
+            >
+              {item.label}
+            </a>
+          ))}
+      </NavMenu>
+
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Outlet />
       </main>
     </div>
   );
-}
-
-export async function loader({ request }: LoaderFunctionArgs) {
-  await authenticate.admin(request);
-  return null;
 }

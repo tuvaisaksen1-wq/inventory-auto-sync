@@ -1,6 +1,9 @@
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
   return new Response(JSON.stringify(data), { ...init, headers });
 };
 

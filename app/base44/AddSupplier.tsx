@@ -8,8 +8,6 @@ import {
   Link as LinkIcon,
   Code,
   FileSpreadsheet,
-  CheckCircle2,
-  AlertCircle,
   Loader2,
   Key,
   Hash,
@@ -17,20 +15,22 @@ import {
   Settings2,
 } from "lucide-react";
 
-type ConnectionType = "api" | "csv" | "excel" | "google_sheet" | "url";
+type ConnectionType = "api" | "excel" | "google_sheet" | "url";
+type ConnectionCardType = ConnectionType | "ebay";
 
 const connectionTypes: Array<{
-  id: ConnectionType;
+  id: ConnectionCardType;
+  target: ConnectionType;
   name: string;
   description: string;
   icon: React.ElementType;
   emoji: string;
 }> = [
-  { id: "api", name: "API Direct Connection", description: "Real-time, log in with supplier", icon: Code, emoji: "🔌" },
-  { id: "csv", name: "CSV File", description: "Upload CSV file from supplier", icon: FileUp, emoji: "📄" },
-  { id: "excel", name: "Excel File", description: "Upload Excel file from supplier", icon: FileUp, emoji: "📊" },
-  { id: "google_sheet", name: "Google Sheet", description: "Live connection, not automatic unless updated", icon: FileSpreadsheet, emoji: "📋" },
-  { id: "url", name: "URL Link", description: "Paste product or category URL we check", icon: LinkIcon, emoji: "🔗" },
+  { id: "api", target: "api", name: "API Direct Connection", description: "Real-time, log in with supplier", icon: Code, emoji: "🔌" },
+  { id: "ebay", target: "url", name: "eBay", description: "Connect to eBay product or store", icon: LinkIcon, emoji: "🛒" },
+  { id: "excel", target: "excel", name: "Excel File", description: "Upload Excel file from supplier", icon: FileUp, emoji: "📊" },
+  { id: "google_sheet", target: "google_sheet", name: "Google Sheet", description: "Live connection, not automatic unless updated", icon: FileSpreadsheet, emoji: "📋" },
+  { id: "url", target: "url", name: "URL Link", description: "Paste product or category URL we check", icon: LinkIcon, emoji: "🔗" },
 ];
 
 const matchingKeyTypes = [
@@ -42,6 +42,40 @@ const matchingKeyTypes = [
 
 type Step = 1 | 2 | 3 | 4 | 5 | 7;
 
+const FrequencyCard = ({
+  syncFrequency,
+  onChange,
+  title = "How often should we check for changes?",
+  helpText = "Every 6 hours is the default. For more frequent updates, consider API or uploading a file. Excessive polling may trigger rate limiting.",
+}: {
+  syncFrequency: string;
+  onChange: (value: string) => void;
+  title?: string;
+  helpText?: string;
+}) => (
+  <div className="space-y-3">
+    <div>
+      <p className="text-xl font-semibold text-slate-800">{title}</p>
+    </div>
+    <FrequencySelect syncFrequency={syncFrequency} onChange={onChange} />
+    <p className="text-sm text-slate-500">{helpText}</p>
+  </div>
+);
+
+const FrequencySelect = ({ syncFrequency, onChange }: { syncFrequency: string; onChange: (value: string) => void }) => (
+  <Select
+    label="Frequency"
+    options={[
+      { label: "Every hour", value: "hourly" },
+      { label: "Every 6 hours", value: "6h" },
+      { label: "Every 12 hours", value: "12h" },
+      { label: "Daily", value: "daily" },
+    ]}
+    value={syncFrequency}
+    onChange={onChange}
+  />
+);
+
 export default function AddSupplier() {
   const location = useLocation();
   const withSearch = (pathname: string) => ({
@@ -49,8 +83,6 @@ export default function AddSupplier() {
     search: location.search,
   });
   const [step, setStep] = useState<Step>(1);
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; products_found: number; matched: number } | null>(null);
   const [syncStatus, setSyncStatus] = useState<
     {
       status: string;
@@ -121,6 +153,7 @@ const applySummary = (
   } | null>(null);
   const [activeSupplierId, setActiveSupplierId] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [selectedConnectionCard, setSelectedConnectionCard] = useState<ConnectionCardType | "">("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -131,12 +164,22 @@ const applySummary = (
     api_url: "",
     api_key: "",
     api_endpoint: "",
+    api_location_id: "",
     sheet_url: "",
     sheet_name: "",
     sheet_matching_tab: "",
     sheet_tab: "",
+    excel_workbook_id: "",
+    excel_sheet_name: "",
+    excel_matching_column: "",
+    excel_stock_column: "",
     file_url: "",
     scrape_url: "",
+    ebay_url: "",
+    ebay_item_number: "",
+    ebay_has_variants: false,
+    scrape_identifier_label: "",
+    scrape_stock_status_text: "",
     scrape_permission: false,
     sync_frequency: "6h",
     notification_types: ["critical_only"] as string[],
@@ -153,60 +196,6 @@ const applySummary = (
 
   const handleInputChange = (field: keyof typeof formData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleTestConnection = async () => {
-    setIsTestingConnection(true);
-    setSubmitError(null);
-    try {
-      const supplierId = formData.name ? toSupplierId(formData.name) : "supplier";
-      const shopDomain = getShopDomainFromLocation();
-      const shopHost = getShopHostFromLocation();
-      const res = await fetch("/api/supplier-setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          test_only: true,
-          supplier_id: supplierId,
-          name: formData.name || "Supplier",
-          description: formData.description,
-          matching_key_type: formData.matching_key_type,
-          connection_type: formData.connection_type,
-          api_url: formData.api_url,
-          api_key: formData.api_key,
-          api_endpoint: formData.api_endpoint,
-          sheet_url: formData.sheet_url,
-          sheet_name: formData.sheet_name,
-          sheet_matching_tab: formData.sheet_matching_tab,
-          sheet_tab: formData.sheet_tab,
-          file_url: formData.file_url,
-          scrape_url: formData.scrape_url,
-          scrape_permission: formData.scrape_permission,
-          sync_frequency: formData.sync_frequency,
-          notification_types: formData.notification_types,
-          status: formData.status,
-          shop_domain: shopDomain,
-          shop_host: shopHost,
-        }),
-      });
-      const data = await readJsonOrText(res);
-      if (!res.ok) {
-        setSubmitError(getErrorMessage(data) || "Test connection failed.");
-        setTestResult({ success: false, products_found: 0, matched: 0 });
-        return;
-      }
-
-      setTestResult({
-        success: true,
-        products_found: Number((data as any)?.products_found ?? 0),
-        matched: Number((data as any)?.matched ?? (data as any)?.products_found ?? 0),
-      });
-    } catch (error) {
-      setSubmitError(`Failed to reach backend: ${String(error)}`);
-      setTestResult({ success: false, products_found: 0, matched: 0 });
-    } finally {
-      setIsTestingConnection(false);
-    }
   };
 
   const toSupplierId = (name: string) => {
@@ -296,11 +285,8 @@ const applySummary = (
 
       setSyncStatus({
         status: nextStatus,
-        products_found:
-          getNumber("products_found", "products", "matched_count", "matched") ||
-          testResult?.products_found ||
-          0,
-        matched: getNumber("matched", "matched_count", "updated_count") || testResult?.matched || 0,
+        products_found: getNumber("products_found", "products", "matched_count", "matched") || 0,
+        matched: getNumber("matched", "matched_count", "updated_count") || 0,
         updated: getNumber("updated_count") || 0,
         skipped: getNumber("skipped_count") || 0,
         not_found: getNumber("not_found_count") || 0,
@@ -308,8 +294,6 @@ const applySummary = (
         message:
           typeof summarySource?.message === "string"
             ? summarySource.message
-            : testResult?.success
-            ? "Products matched"
             : "Sync started",
         next_check:
           typeof initialNextCheck === "string"
@@ -360,19 +344,19 @@ const applySummary = (
     };
   }, [activeSupplierId, syncRun?.run_id, syncRun?.status]);
 
-  const isMatchSelected = (id: string) => formData.matching_key_type === id;
-
   const renderStepIndicator = () => (
-    <div className="flex items-center gap-3 flex-wrap mb-8">
+    <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-8">
       {steps.map((s, idx) => (
         <React.Fragment key={s.id}>
           <div
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
-              step >= s.id ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"
+            className={`flex min-w-[150px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold ${
+              step >= s.id
+                ? "border-indigo-200 bg-indigo-100 text-indigo-700"
+                : "border-slate-200 bg-slate-100 text-slate-500"
             }`}
           >
             <span
-              className={`h-7 w-7 rounded-full text-xs flex items-center justify-center font-semibold ${
+              className={`h-8 w-8 rounded-full text-sm flex items-center justify-center font-semibold ${
                 step >= s.id ? "bg-indigo-600 text-white" : "bg-slate-300 text-white"
               }`}
             >
@@ -380,22 +364,22 @@ const applySummary = (
             </span>
             {s.label}
           </div>
-          {idx < steps.length - 1 && <ChevronRight className="h-4 w-4 text-slate-300" />}
+          {idx < steps.length - 1 && <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />}
         </React.Fragment>
       ))}
     </div>
   );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <a href="/app" className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50">
           <ArrowLeft className="h-5 w-5 text-slate-600" />
         </a>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Create Supplier</h1>
-          <p className="text-slate-500">Connect to your supplier&apos;s inventory</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Create Supplier</h1>
+          <p className="mt-1 text-base text-slate-500">Connect to your supplier&apos;s inventory</p>
         </div>
       </div>
 
@@ -426,38 +410,6 @@ const applySummary = (
               />
             </div>
 
-            <div className="pt-4 border-t border-slate-100 space-y-3">
-              <div>
-                <label className="text-base font-semibold text-slate-800">
-                  Which field in your store (Shopify) should we use for matching?
-                </label>
-                <p className="text-sm text-slate-500">This will be compared with supplier&apos;s product ID/SKU column</p>
-              </div>
-              <div className="space-y-3">
-                {matchingKeyTypes.map((type) => (
-                  <label
-                    key={type.id}
-                    className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                      isMatchSelected(type.id) ? "border-indigo-500 bg-indigo-50" : "border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    <RadioButton
-                      name="matching_key"
-                      value={type.id}
-                      checked={isMatchSelected(type.id)}
-                      onChange={() => handleInputChange("matching_key_type", type.id)}
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xl">{type.emoji}</span>
-                        <span className="font-semibold text-slate-800">{type.label}</span>
-                      </div>
-                      <p className="text-sm text-slate-600">{type.description}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
           </SectionCard>
 
           <div className="flex gap-3">
@@ -483,25 +435,28 @@ const applySummary = (
         <div className="space-y-6">
           <SectionCard>
             <div className="space-y-4">
-              <p className="font-semibold text-slate-800">Select connection type for inventory sync:</p>
+              <p className="text-lg font-semibold text-slate-800">Select connection type for inventory sync:</p>
               <div className="grid gap-4">
                 {connectionTypes.map((type) => (
                   <button
                     key={type.id}
                     onClick={() => {
-                      handleInputChange("connection_type", type.id);
+                      setSelectedConnectionCard(type.id);
+                      handleInputChange("connection_type", type.target);
                       setStep(3);
                     }}
-                    className={`flex items-center gap-4 p-5 rounded-xl border-2 bg-white transition-all text-left ${
-                      formData.connection_type === type.id ? "border-indigo-400 bg-indigo-50" : "border-slate-200 hover:border-indigo-200"
+                    className={`flex items-center gap-3 p-5 rounded-2xl border-2 bg-white transition-all text-left ${
+                      selectedConnectionCard === type.id
+                        ? "border-indigo-400 bg-indigo-50 shadow-sm"
+                        : "border-slate-200 hover:border-indigo-200"
                     }`}
                   >
-                    <div className="text-3xl">{type.emoji}</div>
+                    <div className="text-2xl leading-none">{type.emoji}</div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-slate-800">{type.name}</h3>
-                      <p className="text-sm text-slate-600">{type.description}</p>
+                      <h3 className="text-lg font-semibold text-slate-800">{type.name}</h3>
+                      <p className="mt-1 text-sm text-slate-600">{type.description}</p>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-300" />
+                    <ChevronRight className={`h-5 w-5 ${selectedConnectionCard === type.id ? "text-indigo-500" : "text-slate-300"}`} />
                   </button>
                 ))}
               </div>
@@ -523,170 +478,246 @@ const applySummary = (
       {step === 3 && (
         <div className="space-y-6">
           <SectionCard className="space-y-5">
-            {formData.connection_type === "api" && (
-              <>
-                <h3 className="text-lg font-semibold text-slate-800">🔌 API Setup</h3>
-                <p className="text-sm text-slate-600">We fetch inventory data directly from the supplier&apos;s API.</p>
-                <div className="space-y-4">
-                  <Input label="API Base URL" placeholder="https://api.supplier.com" value={formData.api_url} onChange={(v) => handleInputChange("api_url", v)} />
-                  <Input label="API Key or Token" placeholder="Your API key" type="password" value={formData.api_key} onChange={(v) => handleInputChange("api_key", v)} />
-                  <Input label="Endpoint for products (optional)" placeholder="e.g., /products.json" value={formData.api_endpoint} onChange={(v) => handleInputChange("api_endpoint", v)} />
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={isTestingConnection || !formData.api_url}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {isTestingConnection ? <LoaderRow label="Testing..." /> : "⚙️ Test Connection"}
-                  </button>
-                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
-                </div>
-              </>
-            )}
+{selectedConnectionCard === "api" && (
+  <>
+    <h3 className="text-lg font-semibold text-slate-800">🔌 API Setup</h3>
+    <p className="text-base text-slate-600">
+      We find all SKUs in this store, match them with yours, and synchronize the inventory with the online store we connect to.
+    </p>
 
-            {formData.connection_type === "google_sheet" && (
+    <div className="space-y-4">
+      <Input
+        label="API Base URL"
+        placeholder="https://api.supplier.com"
+        value={formData.api_url}
+        onChange={(v) => handleInputChange("api_url", v)}
+      />
+      <Input
+        label="API Key or Token"
+        placeholder="Your API key"
+        type="password"
+        value={formData.api_key}
+        onChange={(v) => handleInputChange("api_key", v)}
+      />
+      <Input
+        label="Location ID"
+        placeholder="Enter location ID"
+        value={formData.api_location_id}
+        onChange={(v) => handleInputChange("api_location_id", v)}
+      />
+      <FrequencyCard
+        syncFrequency={formData.sync_frequency || "6h"}
+        onChange={(value) => handleInputChange("sync_frequency", value)}
+        title="How often should we check for changes?"
+        helpText=""
+      />
+    </div>
+  </>
+)}
+
+{selectedConnectionCard === "google_sheet" && (
+  <>
+    <h3 className="text-lg font-semibold text-slate-800">📊 Google Sheet Connection (Live)</h3>
+    <p className="text-base text-slate-600">Connect to an Google Sheet for inventory sync.</p>
+
+    <div className="space-y-4">
+      <Input
+        label="🔗 Paste Google Sheet link:"
+        placeholder="https://docs.google.com/spreadsheets/..."
+        value={formData.sheet_url}
+        onChange={(v) => handleInputChange("sheet_url", v)}
+      />
+
+      <Input
+        label="Sheet name/tab (e.g., Sheet1, Inventory, Products)"
+        placeholder="e.g., Sheet1"
+        value={formData.sheet_name}
+        onChange={(v) => handleInputChange("sheet_name", v)}
+        helper="The name of the tab/worksheet to use"
+      />
+
+      <div className="pt-3 border-t border-slate-100 space-y-4">
+        <h4 className="text-xl font-semibold text-slate-800">📦 Supplier&apos;s data (from sheet)</h4>
+        <Input
+          label="Which column contains the supplier's product ID/SKU? (e.g., sku, productcode, ean)"
+          placeholder="e.g., sku"
+          value={formData.sheet_matching_tab}
+          onChange={(v) => handleInputChange("sheet_matching_tab", v)}
+          helper="The column with supplier's product identifier"
+        />
+
+        <Input
+          label="Which column contains the stock count? (e.g., stock, quantity, available)"
+          placeholder="e.g., stock"
+          value={formData.sheet_tab}
+          onChange={(v) => handleInputChange("sheet_tab", v)}
+          helper="The column showing available inventory"
+        />
+      </div>
+      <FrequencyCard
+        syncFrequency={formData.sync_frequency || "6h"}
+        onChange={(value) => handleInputChange("sync_frequency", value)}
+        title="How often should we check for changes in the sheet?"
+      />
+
+    </div>
+  </>
+)}
+
+            {selectedConnectionCard === "excel" && (
               <>
-                <h3 className="text-lg font-semibold text-slate-800">📊 Google Sheet Connection (Live)</h3>
-                <p className="text-sm text-slate-600">
-                  Connect to a spreadsheet from your Google account. We fetch inventory data directly from Google Sheets and keep your store updated.
-                </p>
+                <h3 className="text-lg font-semibold text-slate-800">📊 Excel File Connection</h3>
+                <p className="text-base text-slate-600">Connect to an Excel file for inventory sync.</p>
                 <div className="space-y-4">
-                  <Input label="🔗 Paste Google Sheet link:" placeholder="https://docs.google.com/spreadsheets/..." value={formData.sheet_url} onChange={(v) => handleInputChange("sheet_url", v)} />
-                  <Input label="Sheet name/tab (e.g., Sheet1, Inventory, Products)" placeholder="e.g., Sheet1" value={formData.sheet_name} onChange={(v) => handleInputChange("sheet_name", v)} helper="The name of the tab/worksheet to use" />
+                  <Input
+                    label="Workbook ID (file id)"
+                    placeholder="Enter workbook/file ID"
+                    value={formData.excel_workbook_id}
+                    onChange={(v) => handleInputChange("excel_workbook_id", v)}
+                  />
+                  <Input
+                    label="Worksheet (navn eller id)"
+                    placeholder="e.g., Ark1"
+                    value={formData.excel_sheet_name}
+                    onChange={(v) => handleInputChange("excel_sheet_name", v)}
+                    helper="The name or ID of the worksheet"
+                  />
                   <div className="pt-3 border-t border-slate-100 space-y-4">
-                    <Input label="Which column contains the supplier's product ID/SKU?" placeholder="e.g., sku" value={formData.sheet_matching_tab} onChange={(v) => handleInputChange("sheet_matching_tab", v)} helper="The column with supplier's product identifier" />
-                    <Input label="Which column contains the stock count?" placeholder="e.g., stock" value={formData.sheet_tab} onChange={(v) => handleInputChange("sheet_tab", v)} helper="The column showing available inventory" />
+                    <h4 className="text-xl font-semibold text-slate-800">📦 Supplier&apos;s data (from sheet)</h4>
+                    <Input
+                      label="Which column contains the supplier's product ID/SKU? (e.g., sku, productcode, ean)"
+                      placeholder="e.g., sku"
+                      value={formData.excel_matching_column}
+                      onChange={(v) => handleInputChange("excel_matching_column", v)}
+                      helper="The column with supplier's product identifier"
+                    />
+                    <Input
+                      label="Which column contains the stock count? (e.g., stock, quantity, available)"
+                      placeholder="e.g., stock"
+                      value={formData.excel_stock_column}
+                      onChange={(v) => handleInputChange("excel_stock_column", v)}
+                      helper="The column showing available inventory"
+                    />
                   </div>
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={isTestingConnection || !formData.sheet_url}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {isTestingConnection ? <LoaderRow label="Testing..." /> : "⚙️ Test Connection"}
-                  </button>
-                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
-                </div>
-              </>
-            )}
-
-            {formData.connection_type === "csv" && (
-              <>
-                <h3 className="text-lg font-semibold text-slate-800">📄 CSV File Upload</h3>
-                <p className="text-sm text-slate-600">
-                  Upload a CSV file for inventory sync. The file must contain at least one column for matching_key and one for Inventory Count.
-                </p>
-                <div className="space-y-4">
-                  <Input
-                    label="Upload CSV File"
-                    type="file"
-                    onChange={(v) => {
-                      const file = (v as File | null) || null;
-                      if (file) setUploadedFile(file.name);
-                    }}
-                  />
-                  {uploadedFile && <p className="text-sm text-emerald-600">✅ Uploaded: {uploadedFile}</p>}
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={isTestingConnection || !uploadedFile}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {isTestingConnection ? <LoaderRow label="Analyzing..." /> : "⚙️ Analyze File"}
-                  </button>
-                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
-                  <div className="rounded-xl bg-amber-50 text-amber-800 text-sm px-4 py-3 border border-amber-200">
-                    📅 Update: This connection updates only when you upload a new file.
-                  </div>
-                </div>
-              </>
-            )}
-
-            {formData.connection_type === "excel" && (
-              <>
-                <h3 className="text-lg font-semibold text-slate-800">📊 Excel File Upload</h3>
-                <p className="text-sm text-slate-600">
-                  Upload an Excel file for inventory sync. The file must contain at least one column for matching_key and one for Inventory Count.
-                </p>
-                <div className="space-y-4">
-                  <Input
-                    label="Upload Excel File"
-                    type="file"
-                    onChange={(v) => {
-                      const file = (v as File | null) || null;
-                      if (file) setUploadedFile(file.name);
-                    }}
-                  />
-                  {uploadedFile && <p className="text-sm text-emerald-600">✅ Uploaded: {uploadedFile}</p>}
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={isTestingConnection || !uploadedFile}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {isTestingConnection ? <LoaderRow label="Analyzing..." /> : "⚙️ Analyze File"}
-                  </button>
-                  {testResult && <TestResult success={testResult.success} products={testResult.products_found} matched={testResult.matched} />}
-                  <div className="rounded-xl bg-amber-50 text-amber-800 text-sm px-4 py-3 border border-amber-200">
-                    📅 Update: This connection updates only when you upload a new file.
-                  </div>
-                </div>
-              </>
-            )}
-
-            {formData.connection_type === "url" && (
-              <>
-                <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">
-                  ⚠️ Before continuing: We recommend asking your supplier for permission to fetch inventory data.
-                </div>
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    label="✅ I confirm I have permission or take responsibility myself"
-                    checked={formData.scrape_permission}
-                    onChange={(checked) => handleInputChange("scrape_permission", checked)}
-                  />
-                </div>
-                <div className="space-y-4">
-                  <Input label="Paste URL to category or product:" placeholder="https://brandstreettokyo.com/collections/newest-products" value={formData.scrape_url} onChange={(v) => handleInputChange("scrape_url", v)} />
-                  <button
-                    onClick={handleTestConnection}
-                    disabled={isTestingConnection || !formData.scrape_url || !formData.scrape_permission}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {isTestingConnection ? <LoaderRow label="Analyzing..." /> : "⚙️ Analyze URL"}
-                  </button>
-                  {testResult && (
-                    <div className="p-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm">
-                      ✅ Found {testResult.products_found} products that match your store
-                    </div>
-                  )}
-                <div>
-                  <Select
-                    label="How often should we check for changes?"
-                    options={[
-                      { label: "Every hour", value: "hourly" },
-                      { label: "Every 6 hours", value: "6h" },
-                      { label: "Every 12 hours", value: "12h" },
-                      { label: "Daily", value: "daily" },
-                    ]}
-                    value={formData.sync_frequency}
+                  <FrequencyCard
+                    syncFrequency={formData.sync_frequency || "6h"}
                     onChange={(value) => handleInputChange("sync_frequency", value)}
+                    title="How often should we check for changes?"
+                    helpText=""
                   />
-                  <p className="text-xs text-slate-500 mt-1">
-                    For more frequent updates, consider API or uploading a file instead. More frequent than every 6 hours may cause the website to block us.
-                  </p>
-                </div>
                 </div>
               </>
             )}
+
+{selectedConnectionCard === "ebay" && (
+  <>
+    <h3 className="text-lg font-semibold text-slate-800">🛒 eBay Connection</h3>
+    <p className="text-sm text-slate-600">Connect to an eBay product for inventory sync.</p>
+
+    <div className="space-y-4">
+      <Input
+        label="eBay URL"
+        placeholder="https://www.ebay.com/itm/..."
+        value={formData.ebay_url}
+        onChange={(v) => {
+          handleInputChange("ebay_url", v);
+          handleInputChange("scrape_url", v);
+        }}
+      />
+      <Input
+        label="eBay Item Number"
+        placeholder="Enter eBay item number"
+        value={formData.ebay_item_number}
+        onChange={(v) => handleInputChange("ebay_item_number", v)}
+      />
+      <div className="space-y-3">
+        <p className="text-base font-semibold text-slate-800">Does this product have variants?</p>
+        <div className="space-y-2">
+          <RadioButton
+            name="ebay_variants"
+            value="single"
+            label="No, single product"
+            checked={!formData.ebay_has_variants}
+            onChange={() => handleInputChange("ebay_has_variants", false)}
+          />
+          <RadioButton
+            name="ebay_variants"
+            value="variants"
+            label="Yes, it has variants"
+            checked={formData.ebay_has_variants}
+            onChange={() => handleInputChange("ebay_has_variants", true)}
+          />
+        </div>
+      </div>
+      <FrequencyCard
+        syncFrequency={formData.sync_frequency || "6h"}
+        onChange={(value) => handleInputChange("sync_frequency", value)}
+      />
+    </div>
+  </>
+)}
+
+{selectedConnectionCard === "url" && (
+  <>
+    <div className="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm px-4 py-3">
+      ⚠️ Before continuing: We recommend asking your supplier for permission to fetch inventory data.
+    </div>
+
+    <div className="flex items-start gap-3">
+      <Checkbox
+        label="✅ I confirm I have permission or take responsibility myself"
+        checked={formData.scrape_permission}
+        onChange={(checked) => handleInputChange("scrape_permission", checked)}
+      />
+    </div>
+
+    <div className="space-y-4">
+      <Input
+        label="Paste URL to category or product:"
+        placeholder="https://brandstreettokyo.com/collections/newest-products"
+        value={formData.scrape_url}
+        onChange={(v) => handleInputChange("scrape_url", v)}
+      />
+      <div className="pt-3 border-t border-slate-100 space-y-4">
+        <h4 className="text-xl font-semibold text-slate-800">📦 Product data from website</h4>
+        <Input
+          label="What is the product identifier called on this website? (e.g., SKU, Product Code, Item Number)"
+          placeholder="e.g., SKU"
+          value={formData.scrape_identifier_label}
+          onChange={(v) => handleInputChange("scrape_identifier_label", v)}
+          helper="How the website labels the product identifier"
+        />
+        <Input
+          label="What text appears when product is in stock / out of stock?"
+          placeholder="e.g., In Stock / Out of Stock, Available / Sold Out"
+          value={formData.scrape_stock_status_text}
+          onChange={(v) => handleInputChange("scrape_stock_status_text", v)}
+          helper="The exact text that indicates stock status on the website"
+        />
+      </div>
+
+      <FrequencyCard
+        syncFrequency={formData.sync_frequency || "6h"}
+        onChange={(value) => handleInputChange("sync_frequency", value)}
+        title="How often should we check for changes?"
+        helpText="For more frequent updates, consider API or uploading a file instead. More frequent than every 6 hours may cause the website to block us."
+      />
+
+    </div>
+  </>
+)}
           </SectionCard>
 
           <div className="flex gap-3">
             <button
               onClick={() => setStep(2)}
-              className="flex-1 text-center rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="flex-1 text-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               Back
             </button>
             <button
               onClick={() => setStep(4)}
-              className="flex-1 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-3 text-sm font-semibold shadow-lg"
+              className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-3 text-sm font-semibold shadow-lg"
             >
               Next
             </button>
@@ -758,7 +789,7 @@ const applySummary = (
               />
               <SummaryRow
                 label="Connection Type"
-                value={connectionTypes.find((c) => c.id === formData.connection_type)?.name || formData.connection_type || "-"}
+                value={connectionTypes.find((c) => c.id === selectedConnectionCard)?.name || formData.connection_type || "-"}
               />
               <SummaryRow label="Update Frequency" value={formData.sync_frequency} />
               <SummaryRow
@@ -871,7 +902,7 @@ function SectionCard({
   className?: string;
 }) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200/70 shadow-sm p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 md:p-6 ${className}`}>
       {children}
     </div>
   );
@@ -923,23 +954,6 @@ function Input({
           helpText={helper}
         />
       )}
-    </div>
-  );
-}
-
-function LoaderRow({ label }: { label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      {label}
-    </span>
-  );
-}
-
-function TestResult({ success, products, matched }: { success: boolean; products: number; matched: number }) {
-  return (
-    <div className={`p-4 rounded-xl text-sm ${success ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200"}`}>
-      {success ? `✅ Found ${products} products (${matched} match in your store)` : "❌ Connection failed. Please check your credentials."}
     </div>
   );
 }

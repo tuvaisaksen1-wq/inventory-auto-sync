@@ -3,6 +3,7 @@ import type { RouteConfig } from "@react-router/dev/routes";
 export default [
   { path: "/", file: "routes/_index.tsx" },
   { path: "/health", file: "routes/health.tsx" },
+  { path: "/build.txt", file: "routes/build.txt.tsx" },
   { path: "/start-sync", file: "routes/start-sync.tsx" },
   { path: "/sync-status", file: "routes/sync-status.tsx" },
   { path: "/products/:supplier_id", file: "routes/products.$supplier_id.tsx" },

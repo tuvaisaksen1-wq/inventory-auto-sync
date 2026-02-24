@@ -48,18 +48,25 @@ type SyncRunRow = {
   next_run_at: string | null;
 };
 
-function normalizeJson(value: unknown) {
+// ✅ Single source of truth: parse JSON whether it comes as object or string
+export function normalizeJson(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
+
   if (typeof value === "string") {
     try {
-      return JSON.parse(value) as Record<string, unknown>;
+      const parsed = JSON.parse(value) as unknown;
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : null;
     } catch {
       return null;
     }
   }
+
   if (typeof value === "object") {
     return value as Record<string, unknown>;
   }
+
   return null;
 }
 
@@ -96,9 +103,9 @@ export async function getSupplierProfile(supplierId: string) {
     connection: normalizeJson(row.connection),
     shop: normalizeJson(row.shop),
     frequency: row.frequency,
-            notifications: normalizeJson(row.notifications),
-            sync_frequency: row.sync_frequency,
-            next_run_at: row.next_run_at,
+    notifications: normalizeJson(row.notifications),
+    sync_frequency: row.sync_frequency,
+    next_run_at: row.next_run_at,
   } satisfies SupplierProfile;
 }
 
@@ -127,9 +134,10 @@ export async function getLatestSyncRun(supplierId: string) {
 
   const row = result.rows[0];
   if (!row) return null;
+
   return {
     ...row,
-    summary: typeof row.summary === "object" && row.summary !== null ? row.summary : null,
+    summary: normalizeJson(row.summary),
     next_run_at: row.next_run_at,
   };
 }
@@ -148,9 +156,10 @@ export async function getSyncRunById(runId: string) {
 
   const row = result.rows[0];
   if (!row) return null;
+
   return {
     ...row,
-    summary: typeof row.summary === "object" && row.summary !== null ? row.summary : null,
+    summary: normalizeJson(row.summary),
     next_run_at: row.next_run_at,
   };
 }
@@ -162,6 +171,7 @@ export async function createSyncRun(params: {
   status?: string;
 }) {
   const { supplierId, tenantId, trigger = "manual", status = "queued" } = params;
+
   const result = await query(
     `INSERT INTO sync_runs (
        tenant_id,
@@ -197,7 +207,10 @@ export async function setSyncRunStatus(
   return result.rowCount ?? 0;
 }
 
-export async function setSyncRunSummary(runId: string, summary: Record<string, unknown>) {
+export async function setSyncRunSummary(
+  runId: string,
+  summary: Record<string, unknown>
+) {
   const result = await query(
     `UPDATE sync_runs
      SET summary = $2
@@ -210,12 +223,17 @@ export async function setSyncRunSummary(runId: string, summary: Record<string, u
 
 export function computeNextRunAt(frequency: string | null) {
   const now = new Date();
+
   const map: Record<string, number> = {
-    hourly: 60,
+    "1h": 60,
+    "3h": 3 * 60,
     "6h": 6 * 60,
     "12h": 12 * 60,
+    "24h": 24 * 60,
+    hourly: 60,
     daily: 24 * 60,
   };
+
   const minutes = map[frequency ?? "6h"] ?? 6 * 60;
   return new Date(now.getTime() + minutes * 60 * 1000);
 }
@@ -267,7 +285,10 @@ export async function getSuppliers() {
 
   return result.rows.map((row) => {
     const shop = normalizeJson(row.shop);
-    const storeName = shop && typeof shop === "object" ? (shop as Record<string, unknown>).domain : null;
+    const storeName =
+      shop && typeof shop === "object"
+        ? (shop as Record<string, unknown>).domain
+        : null;
 
     const statusValue = String(row.status ?? "active");
     const normalizedStatus =

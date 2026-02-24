@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router";
-import { CheckCircle2, Link2, Package, Zap, BadgeCheck, AlertTriangle, ArrowRight } from "lucide-react";
+import { CheckCircle2, Link2, Package, BadgeCheck, AlertTriangle, ArrowRight } from "lucide-react";
 
 type SupplierStatus = "active" | "attention_required" | "syncing" | "disconnected";
 type ProductStatus = "synced" | "pending" | "error";
@@ -54,7 +54,8 @@ export default function Dashboard({
   const activeSuppliers = suppliers.filter((s) => s.status === "active").length;
   const totalProducts = products.length;
   const syncedProducts = products.filter((p) => p.status === "synced").length;
-  const stockoutsPrevented = 0;
+  const visibleSuppliers = suppliers.slice(0, 5);
+  const visibleProducts = products.slice(0, 5);
 
   const lastSync = suppliers.reduce<string | null>((latest, s) => {
     if (!s.last_sync) return latest;
@@ -63,10 +64,13 @@ export default function Dashboard({
   }, null);
 
   const hasIssues = suppliers.some((s) => s.status !== "active");
-  const healthLabel = hasIssues ? "Needs attention" : "All good";
-
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border-2 border-red-700 bg-red-600 px-4 py-3 text-white shadow-lg">
+        <p className="text-base font-extrabold tracking-wide">BUILD MARKER: RED BOX ACTIVE</p>
+        <p className="text-sm font-semibold">If you can see this, frontend bundle is the newest deploy.</p>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
@@ -83,36 +87,39 @@ export default function Dashboard({
 
       <StatusBanner lastSync={lastSync} hasIssues={hasIssues} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatCard title="Active Suppliers" value={activeSuppliers} subtitle={`${totalSuppliers} total connected`} icon={<Link2 className="h-5 w-5 text-white" />} />
         <StatCard title="Products Synced" value={syncedProducts} subtitle={`${totalProducts} total products`} icon={<Package className="h-5 w-5 text-white" />} />
-        <StatCard title="Stockouts Prevented" value={stockoutsPrevented} subtitle="Total since start" icon={<CheckCircle2 className="h-5 w-5 text-white" />} />
-        <StatCard
-          title="Sync Health"
-          value={healthLabel}
-          subtitle={hasIssues ? "Some suppliers need attention" : "No issues detected"}
-          icon={<Zap className="h-5 w-5 text-white" />}
-        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card header="Connected Suppliers" actionLabel="View All" actionHref="/app/suppliers">
-            <div className="divide-y divide-slate-100">
+          <Card
+            header="Connected Suppliers"
+            subtitle={`${totalSuppliers} supplier${totalSuppliers === 1 ? "" : "s"}`}
+            actionLabel="View All"
+            actionHref="/app/suppliers"
+          >
+            <div className="space-y-3">
               {suppliers.length === 0 ? (
                 <EmptyState label="No suppliers yet" />
               ) : (
-                suppliers.map((s) => <SupplierRow key={s.id} supplier={s} />)
+                visibleSuppliers.map((s) => <SupplierRow key={s.id} supplier={s} />)
               )}
             </div>
           </Card>
 
-          <Card header="Connected Products" actionLabel="View All" actionHref="/app/products">
-            <div className="divide-y divide-slate-100">
+          <Card
+            header="Connected Products"
+            subtitle={`${totalProducts} product${totalProducts === 1 ? "" : "s"}`}
+            actionLabel="View All"
+            actionHref="/app/products"
+          >
+            <div className="space-y-3">
               {products.length === 0 ? (
                 <EmptyState label="No products synced yet" />
               ) : (
-                products.map((p) => <ProductRow key={p.id} product={p} />)
+                visibleProducts.map((p) => <ProductRow key={p.id} product={p} />)
               )}
             </div>
           </Card>
@@ -192,28 +199,34 @@ function StatCard({
 
 function Card({
   header,
+  subtitle,
   actionLabel,
   actionHref,
   children,
 }: {
   header: string;
+  subtitle?: string;
   actionLabel?: string;
   actionHref?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100">
         <div>
-          <h3 className="font-semibold text-slate-800">{header}</h3>
+          <h3 className="text-[2rem] leading-none font-semibold text-slate-800">{header}</h3>
+          {subtitle && <p className="mt-2 text-sm text-slate-500">{subtitle}</p>}
         </div>
         {actionLabel && actionHref && (
-          <Link to={actionHref} className="text-sm font-semibold text-slate-700 hover:text-slate-900 inline-flex items-center gap-1">
-            {actionLabel} <ArrowRight className="h-3.5 w-3.5" />
+          <Link
+            to={actionHref}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50"
+          >
+            {actionLabel} <ArrowRight className="h-4 w-4" />
           </Link>
         )}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-4 md:p-5">{children}</div>
     </div>
   );
 }
@@ -233,21 +246,20 @@ function SupplierRow({ supplier }: { supplier: Supplier }) {
   const status = statusConfig[supplier.status];
   const StatusIcon = status.icon;
   return (
-    <div className="flex items-center gap-4 py-3">
-      <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white font-semibold text-sm ${color}`}>
-        {supplier.name.substring(0, 1).toUpperCase()}
+    <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/40 p-4">
+      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-white font-semibold text-xl shadow ${color}`}>
+        {supplier.name.substring(0, 1).toUpperCase() || "S"}
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0">
         <p className="font-semibold text-slate-800 truncate">{supplier.name}</p>
-        <p className="text-sm text-slate-500 truncate">Connected to: {supplier.store_name || "Your Store"}</p>
-      </div>
-      <div className="hidden sm:flex items-center gap-2 text-sm text-slate-600">
-        <Package className="h-4 w-4 text-slate-400" />
-        <span className="font-medium">{supplier.products_count}</span>
-        <span className="text-xs text-slate-400">products synced</span>
+        <div className="mt-0.5 flex items-center gap-2 text-sm text-slate-500">
+          <Package className="h-4 w-4 text-slate-400" />
+          <span className="font-semibold text-slate-700">{supplier.products_count ?? 0}</span>
+          <span>products synced</span>
+        </div>
       </div>
       <div className="text-sm text-slate-500">{formatTimeAgo(supplier.last_sync)}</div>
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border ${status.bg} ${status.color} ${status.border}`}>
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold border ${status.bg} ${status.color} ${status.border}`}>
         <StatusIcon className="h-4 w-4" /> {status.label}
       </span>
     </div>
@@ -263,19 +275,19 @@ function ProductRow({ product }: { product: Product }) {
   const status = statusMap[product.status];
 
   return (
-    <div className="grid md:grid-cols-[2fr_1fr_0.8fr_0.6fr_0.8fr] items-center gap-3 py-3">
+    <div className="grid md:grid-cols-[2.1fr_1fr_0.6fr_0.8fr_0.9fr] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/40 px-4 py-3">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center text-xs font-medium">IMG</div>
+        <div className="h-10 w-3 rounded-full bg-slate-200" />
         <div className="min-w-0">
           <p className="font-semibold text-slate-800 truncate">{product.name}</p>
-          <p className="text-sm text-slate-500 truncate">Connected to: {product.supplier_name}</p>
+          <p className="text-sm text-slate-500 truncate">{product.supplier_name}</p>
         </div>
       </div>
-      <div className="text-sm font-mono px-2 py-1 bg-slate-100 rounded-lg border border-slate-200 inline-flex w-max">{product.sku}</div>
-      <div className="text-sm font-semibold text-slate-800">{product.stock}</div>
+      <div className="text-sm font-mono font-semibold px-3 py-1 bg-white rounded-lg border border-slate-300 inline-flex w-max">{product.sku}</div>
+      <div className="text-3xl font-semibold text-slate-800">{product.stock}</div>
       <div className="text-sm text-slate-500">{formatTimeAgo(product.last_sync)}</div>
       <div>
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border ${status.bg} ${status.color} ${status.border}`}>
+        <span className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-sm font-semibold border ${status.bg} ${status.color} ${status.border}`}>
           <BadgeCheck className="h-4 w-4" /> {status.label}
         </span>
       </div>
@@ -295,17 +307,29 @@ function EmptyState({ label }: { label: string }) {
 }
 
 function ActivityRow({ activity }: { activity: Activity }) {
-  const colorByType =
+  const tone =
     activity.type === "success"
-      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      ? "border-l-emerald-400"
       : activity.type === "warning"
-      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-      : "bg-rose-50 text-rose-700 border-rose-200";
+      ? "border-l-indigo-300"
+      : "border-l-rose-400";
+  const iconTone =
+    activity.type === "success"
+      ? "from-emerald-500 to-teal-600"
+      : activity.type === "warning"
+      ? "from-indigo-500 to-violet-600"
+      : "from-rose-500 to-red-600";
+
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-xl border ${colorByType}`}>
-      <div className="w-1 rounded-full bg-current opacity-60" />
+    <div className={`flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 border-l-4 ${tone}`}>
+      <div className={`h-12 w-12 rounded-2xl bg-gradient-to-br ${iconTone} flex items-center justify-center text-white shadow`}>
+        <Package className="h-6 w-6" />
+      </div>
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-slate-800">{activity.title}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-slate-800">{activity.title}</p>
+          <span className="whitespace-nowrap text-sm text-slate-400">{formatTimeAgo(activity.date)}</span>
+        </div>
         <p className="text-sm text-slate-600">{activity.description}</p>
         <p className="text-xs text-slate-500 mt-1">
           Supplier: <span className="font-medium text-slate-700">{activity.supplier_name}</span>
@@ -317,7 +341,6 @@ function ActivityRow({ activity }: { activity: Activity }) {
             {activity.new_value && <Badge text={activity.new_value} className="bg-emerald-100 text-emerald-700 border border-emerald-200" />}
           </div>
         )}
-        <p className="text-xs text-slate-400 mt-1">{formatTimeAgo(activity.date)}</p>
         {activity.type === "error" && (
           <button className="text-xs font-semibold text-rose-600 mt-1 hover:text-rose-700">Fix Now →</button>
         )}

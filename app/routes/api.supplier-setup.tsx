@@ -126,6 +126,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const input = await readInput(request);
+  console.log("supplier-setup body", input);
   const url = new URL(request.url);
   const headerShop = request.headers.get("X-Shopify-Shop-Domain");
   const hostParam =
