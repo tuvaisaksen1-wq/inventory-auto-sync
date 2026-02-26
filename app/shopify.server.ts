@@ -27,6 +27,8 @@ const shopify = shopifyApp({
   appUrl: process.env.SHOPIFY_APP_URL ?? process.env.APP_URL ?? "",
   apiVersion: ApiVersion.January26,
   distribution: AppDistribution.AppStore,
+  // Backend sync requires a non-user Admin API token, not shpua user tokens.
+  useOnlineTokens: false,
   sessionStorage: new PrismaSessionStorage(prisma),
 });
 
