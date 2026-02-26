@@ -2,6 +2,7 @@
 import type { ActionFunctionArgs } from "@react-router/node";
 import { query } from "../server/db.server";
 import { computeNextRunAt } from "../server/sync.server";
+import { authenticate } from "../shopify.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -65,16 +66,36 @@ type SessionRow = {
 };
 
 async function getAccessTokenFromSession(shopDomain: string) {
-  const result = await query<SessionRow>(
+  // Prefer offline Admin API token for backend inventory sync.
+  const offlineResult = await query<SessionRow>(
     `SELECT "accessToken" AS access_token, shop
      FROM "Session"
      WHERE shop = $1
-     ORDER BY "expires" DESC NULLS LAST
+       AND "isOnline" = false
+       AND "accessToken" NOT LIKE 'shpua_%'
      LIMIT 1`,
     [shopDomain]
   );
 
-  return result.rows[0]?.access_token ?? null;
+  const offlineToken = offlineResult.rows[0]?.access_token ?? null;
+  if (offlineToken) return offlineToken;
+
+  // Fallback: any non-user token for this shop.
+  const fallbackResult = await query<SessionRow>(
+    `SELECT "accessToken" AS access_token, shop
+     FROM "Session"
+     WHERE shop = $1
+       AND "accessToken" NOT LIKE 'shpua_%'
+     ORDER BY "isOnline" ASC, "expires" DESC NULLS LAST
+     LIMIT 1`,
+    [shopDomain]
+  );
+
+  return fallbackResult.rows[0]?.access_token ?? null;
+}
+
+function isUserAccessToken(token: string) {
+  return token.startsWith("shpua_");
 }
 
 async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
@@ -134,6 +155,9 @@ function decodeShopFromIdToken(token: string | null) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const authResult = await authenticate.admin(request);
+  const authenticatedShop = authResult.session?.shop ?? null;
+
   if (!N8N_SUPPLIER_SETUP_URL) {
     return json(
       { ok: false, message: "Missing N8N_SUPPLIER_SETUP_URL env variable" },
@@ -151,6 +175,7 @@ export async function action({ request }: ActionFunctionArgs) {
     url.searchParams.get("host");
   const shopDomain =
     toStringValue(input.shop_domain) ||
+    authenticatedShop ||
     headerShop ||
     url.searchParams.get("shop") ||
     decodeShopFromHost(hostParam) ||
@@ -179,6 +204,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const testOnly = Boolean(input.test_only);
   // Prefer explicit token, then shop-scoped session token.
   let accessToken = toStringValue(input.access_token);
+  if (isUserAccessToken(accessToken)) {
+    accessToken = "";
+  }
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
   }
@@ -232,7 +260,18 @@ export async function action({ request }: ActionFunctionArgs) {
       {
         ok: false,
         message:
-          "Missing Shopify access token. Install app in store or set SHOPIFY_ACCESS_TOKEN.",
+          "Missing Shopify Admin API access token. Reinstall app to refresh offline token.",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (!testOnly && isUserAccessToken(accessToken)) {
+    return json(
+      {
+        ok: false,
+        message:
+          "Stored token is a Shopify User Access Token (shpua_) and cannot call /admin/api. Reinstall app to refresh offline Admin API token.",
       },
       { status: 400 }
     );
