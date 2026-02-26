@@ -3,6 +3,7 @@ import type { ActionFunctionArgs } from "@react-router/node";
 import { query } from "../server/db.server";
 import { computeNextRunAt } from "../server/sync.server";
 import { authenticate } from "../shopify.server";
+import { prisma } from "../server/prisma.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -60,42 +61,110 @@ function toStringArray(value: unknown) {
   return [];
 }
 
-type SessionRow = {
-  access_token: string | null;
-  shop: string;
-};
-
 async function getAccessTokenFromSession(shopDomain: string) {
-  // Prefer offline Admin API token for backend inventory sync.
-  const offlineResult = await query<SessionRow>(
-    `SELECT "accessToken" AS access_token, shop
-     FROM "Session"
-     WHERE shop = $1
-       AND "isOnline" = false
-       AND "accessToken" NOT LIKE 'shpua_%'
-     LIMIT 1`,
-    [shopDomain]
-  );
-
-  const offlineToken = offlineResult.rows[0]?.access_token ?? null;
+  // Session storage for Shopify auth lives in Prisma/DATABASE_URL.
+  const offlineSession = await prisma.session.findFirst({
+    where: { shop: shopDomain, isOnline: false },
+    orderBy: { expires: "desc" },
+  });
+  const offlineToken = offlineSession?.accessToken ?? null;
   if (offlineToken) return offlineToken;
 
-  // Fallback: any non-user token for this shop.
-  const fallbackResult = await query<SessionRow>(
-    `SELECT "accessToken" AS access_token, shop
-     FROM "Session"
-     WHERE shop = $1
-       AND "accessToken" NOT LIKE 'shpua_%'
-     ORDER BY "isOnline" ASC, "expires" DESC NULLS LAST
-     LIMIT 1`,
-    [shopDomain]
-  );
-
-  return fallbackResult.rows[0]?.access_token ?? null;
+  const fallbackSession = await prisma.session.findFirst({
+    where: { shop: shopDomain },
+    orderBy: [{ isOnline: "asc" }, { expires: "desc" }],
+  });
+  return fallbackSession?.accessToken ?? null;
 }
 
-function isUserAccessToken(token: string) {
-  return token.startsWith("shpua_");
+function getBearerToken(authorizationHeader: string | null) {
+  if (!authorizationHeader) return null;
+  const [scheme, value] = authorizationHeader.split(" ");
+  if (!scheme || !value) return null;
+  return scheme.toLowerCase() === "bearer" ? value : null;
+}
+
+async function exchangeIdTokenForOfflineAccessToken(
+  shopDomain: string,
+  idToken: string
+) {
+  const clientId = process.env.SHOPIFY_API_KEY ?? "";
+  const clientSecret = process.env.SHOPIFY_API_SECRET ?? "";
+  if (!clientId || !clientSecret) return null;
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+    subject_token: idToken,
+    subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+    requested_token_type:
+      "urn:shopify:params:oauth:token-type:offline-access-token",
+  });
+
+  const response = await fetch(
+    `https://${shopDomain}/admin/oauth/access_token`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: params.toString(),
+    }
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const tokenData = (await response.json()) as {
+    access_token?: string;
+    scope?: string;
+    expires_in?: number;
+    refresh_token?: string;
+    refresh_token_expires_in?: number;
+  };
+
+  if (!tokenData.access_token) return null;
+
+  const sessionId = `offline_${shopDomain}`;
+  const now = Date.now();
+  const expires =
+    typeof tokenData.expires_in === "number"
+      ? new Date(now + tokenData.expires_in * 1000)
+      : null;
+  const refreshTokenExpires =
+    typeof tokenData.refresh_token_expires_in === "number"
+      ? new Date(now + tokenData.refresh_token_expires_in * 1000)
+      : null;
+
+  await prisma.session.upsert({
+    where: { id: sessionId },
+    update: {
+      shop: shopDomain,
+      state: "token-exchange",
+      isOnline: false,
+      accessToken: tokenData.access_token,
+      scope: tokenData.scope ?? null,
+      expires,
+      refreshToken: tokenData.refresh_token ?? null,
+      refreshTokenExpires,
+    },
+    create: {
+      id: sessionId,
+      shop: shopDomain,
+      state: "token-exchange",
+      isOnline: false,
+      accessToken: tokenData.access_token,
+      scope: tokenData.scope ?? null,
+      expires,
+      refreshToken: tokenData.refresh_token ?? null,
+      refreshTokenExpires,
+    },
+  });
+
+  return tokenData.access_token;
 }
 
 async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
@@ -157,6 +226,7 @@ function decodeShopFromIdToken(token: string | null) {
 export async function action({ request }: ActionFunctionArgs) {
   const authResult = await authenticate.admin(request);
   const authenticatedShop = authResult.session?.shop ?? null;
+  const idToken = getBearerToken(request.headers.get("authorization"));
 
   if (!N8N_SUPPLIER_SETUP_URL) {
     return json(
@@ -179,11 +249,7 @@ export async function action({ request }: ActionFunctionArgs) {
     headerShop ||
     url.searchParams.get("shop") ||
     decodeShopFromHost(hostParam) ||
-    decodeShopFromIdToken(
-      request.headers.get("authorization")?.toLowerCase().startsWith("bearer ")
-        ? request.headers.get("authorization")?.slice(7) ?? null
-        : null
-    ) ||
+    decodeShopFromIdToken(idToken) ||
     null;
 
   const name = toStringValue(input.name);
@@ -202,13 +268,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const notificationTypes = toStringArray(input.notification_types);
   const nextRunAt = computeNextRunAt(syncFrequency);
   const testOnly = Boolean(input.test_only);
-  // Prefer explicit token, then shop-scoped session token.
+  // Prefer explicit token, then stored session token, then token exchange.
   let accessToken = toStringValue(input.access_token);
-  if (isUserAccessToken(accessToken)) {
-    accessToken = "";
-  }
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
+  }
+  if (!accessToken && shopDomain && idToken) {
+    accessToken =
+      (await exchangeIdTokenForOfflineAccessToken(shopDomain, idToken)) ?? "";
   }
 
   if (!supplierId || !name) {
@@ -260,18 +327,7 @@ export async function action({ request }: ActionFunctionArgs) {
       {
         ok: false,
         message:
-          "Missing Shopify Admin API access token. Reinstall app to refresh offline token.",
-      },
-      { status: 400 }
-    );
-  }
-
-  if (!testOnly && isUserAccessToken(accessToken)) {
-    return json(
-      {
-        ok: false,
-        message:
-          "Stored token is a Shopify User Access Token (shpua_) and cannot call /admin/api. Reinstall app to refresh offline Admin API token.",
+          "Missing Shopify Admin API access token. Open app from Shopify Admin and try again.",
       },
       { status: 400 }
     );
