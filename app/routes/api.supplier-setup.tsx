@@ -64,14 +64,21 @@ function toStringArray(value: unknown) {
 async function getAccessTokenFromSession(shopDomain: string) {
   // Session storage for Shopify auth lives in Prisma/DATABASE_URL.
   const offlineSession = await prisma.session.findFirst({
-    where: { shop: shopDomain, isOnline: false },
+    where: {
+      shop: shopDomain,
+      isOnline: false,
+      NOT: { accessToken: { startsWith: "shpua_" } },
+    },
     orderBy: { expires: "desc" },
   });
   const offlineToken = offlineSession?.accessToken ?? null;
   if (offlineToken) return offlineToken;
 
   const fallbackSession = await prisma.session.findFirst({
-    where: { shop: shopDomain },
+    where: {
+      shop: shopDomain,
+      NOT: { accessToken: { startsWith: "shpua_" } },
+    },
     orderBy: [{ isOnline: "asc" }, { expires: "desc" }],
   });
   return fallbackSession?.accessToken ?? null;
@@ -82,6 +89,10 @@ function getBearerToken(authorizationHeader: string | null) {
   const [scheme, value] = authorizationHeader.split(" ");
   if (!scheme || !value) return null;
   return scheme.toLowerCase() === "bearer" ? value : null;
+}
+
+function isUserAccessToken(token: string) {
+  return token.startsWith("shpua_");
 }
 
 async function exchangeIdTokenForOfflineAccessToken(
@@ -270,12 +281,21 @@ export async function action({ request }: ActionFunctionArgs) {
   const testOnly = Boolean(input.test_only);
   // Prefer explicit token, then stored session token, then token exchange.
   let accessToken = toStringValue(input.access_token);
+  if (isUserAccessToken(accessToken)) {
+    accessToken = "";
+  }
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
+  }
+  if (isUserAccessToken(accessToken)) {
+    accessToken = "";
   }
   if (!accessToken && shopDomain && idToken) {
     accessToken =
       (await exchangeIdTokenForOfflineAccessToken(shopDomain, idToken)) ?? "";
+  }
+  if (isUserAccessToken(accessToken)) {
+    accessToken = "";
   }
 
   if (!supplierId || !name) {
@@ -327,7 +347,7 @@ export async function action({ request }: ActionFunctionArgs) {
       {
         ok: false,
         message:
-          "Missing Shopify Admin API access token. Open app from Shopify Admin and try again.",
+          "Missing Shopify Admin API access token. Could not derive offline token for this shop.",
       },
       { status: 400 }
     );
