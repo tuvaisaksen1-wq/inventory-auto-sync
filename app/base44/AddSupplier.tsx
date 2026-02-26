@@ -220,9 +220,20 @@ const applySummary = (
       const supplierId = toSupplierId(formData.name);
       const shopDomain = getShopDomainFromLocation();
       const shopHost = getShopHostFromLocation();
+      const idToken = await getAppBridgeIdToken();
+      if (!idToken) {
+        setSubmitError(
+          "Missing Shopify session token. Reload app from Shopify Admin and try again."
+        );
+        return;
+      }
       const setupRes = await fetch("/api/supplier-setup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+          ...(shopDomain ? { "X-Shopify-Shop-Domain": shopDomain } : {}),
+        },
         body: JSON.stringify({
           supplier_id: supplierId,
           name: formData.name,
@@ -972,6 +983,21 @@ function getShopDomainFromLocation() {
   try {
     const url = new URL(window.location.href);
     return url.searchParams.get("shop");
+  } catch {
+    return null;
+  }
+}
+
+async function getAppBridgeIdToken() {
+  if (typeof window === "undefined") return null;
+  const shopifyGlobal = (window as Window & {
+    shopify?: { idToken?: () => Promise<string> };
+  }).shopify;
+  if (!shopifyGlobal?.idToken) return null;
+
+  try {
+    const token = await shopifyGlobal.idToken();
+    return typeof token === "string" && token.length > 0 ? token : null;
   } catch {
     return null;
   }
