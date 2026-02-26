@@ -111,89 +111,25 @@ async function exchangeIdTokenForOfflineAccessToken(
   shopDomain: string,
   idToken: string
 ) {
-  const clientId = process.env.SHOPIFY_API_KEY ?? "";
-  const clientSecret = process.env.SHOPIFY_API_SECRET ?? "";
-  if (!clientId || !clientSecret) return null;
+  try {
+    const exchange = await shopify.api.auth.tokenExchange({
+      shop: shopDomain,
+      sessionToken: idToken,
+      requestedTokenType:
+        "urn:shopify:params:oauth:token-type:offline-access-token",
+    });
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-    subject_token: idToken,
-    subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-    requested_token_type:
-      "urn:shopify:params:oauth:token-type:offline-access-token",
-  });
+    if (!exchange?.session?.accessToken) return null;
 
-  const response = await fetch(
-    `https://${shopDomain}/admin/oauth/access_token`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
+    await shopify.sessionStorage.storeSession(exchange.session);
+    return exchange.session.accessToken;
+  } catch (error) {
     console.error("token exchange failed", {
       shopDomain,
-      status: response.status,
-      body: errorText,
+      error: String(error),
     });
     return null;
   }
-
-  const tokenData = (await response.json()) as {
-    access_token?: string;
-    scope?: string;
-    expires_in?: number;
-    refresh_token?: string;
-    refresh_token_expires_in?: number;
-  };
-
-  if (!tokenData.access_token) return null;
-
-  const sessionId = `offline_${shopDomain}`;
-  const now = Date.now();
-  const expires =
-    typeof tokenData.expires_in === "number"
-      ? new Date(now + tokenData.expires_in * 1000)
-      : null;
-  const refreshTokenExpires =
-    typeof tokenData.refresh_token_expires_in === "number"
-      ? new Date(now + tokenData.refresh_token_expires_in * 1000)
-      : null;
-
-  await prisma.session.upsert({
-    where: { id: sessionId },
-    update: {
-      shop: shopDomain,
-      state: "token-exchange",
-      isOnline: false,
-      accessToken: tokenData.access_token,
-      scope: tokenData.scope ?? null,
-      expires,
-      refreshToken: tokenData.refresh_token ?? null,
-      refreshTokenExpires,
-    },
-    create: {
-      id: sessionId,
-      shop: shopDomain,
-      state: "token-exchange",
-      isOnline: false,
-      accessToken: tokenData.access_token,
-      scope: tokenData.scope ?? null,
-      expires,
-      refreshToken: tokenData.refresh_token ?? null,
-      refreshTokenExpires,
-    },
-  });
-
-  return tokenData.access_token;
 }
 
 async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
