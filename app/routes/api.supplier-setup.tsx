@@ -124,12 +124,89 @@ async function exchangeIdTokenForOfflineAccessToken(
     await shopify.sessionStorage.storeSession(exchange.session);
     return exchange.session.accessToken;
   } catch (error) {
-    console.error("token exchange failed", {
+    console.error("token exchange failed via sdk", {
       shopDomain,
       error: String(error),
     });
+  }
+
+  // Fallback: call OAuth exchange endpoint directly (same payload shape used by Shopify API lib).
+  const apiKey = process.env.SHOPIFY_API_KEY ?? "";
+  const apiSecret = process.env.SHOPIFY_API_SECRET ?? "";
+  if (!apiKey || !apiSecret) {
+    console.error("token exchange fallback missing api credentials", { shopDomain });
     return null;
   }
+
+  const response = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      client_id: apiKey,
+      client_secret: apiSecret,
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      subject_token: idToken,
+      subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+      requested_token_type:
+        "urn:shopify:params:oauth:token-type:offline-access-token",
+      expiring: "0",
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("token exchange failed via http fallback", {
+      shopDomain,
+      status: response.status,
+      body: errorText,
+    });
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    access_token?: string;
+    scope?: string;
+  };
+  const accessToken = payload.access_token ?? null;
+  if (!accessToken || isUserAccessToken(accessToken)) {
+    console.error("token exchange fallback returned invalid token type", {
+      shopDomain,
+      tokenPrefix: accessToken?.slice(0, 6) ?? "none",
+    });
+    return null;
+  }
+
+  try {
+    const sessionId = shopify.api.session.getOfflineId(shopDomain);
+    await prisma.session.upsert({
+      where: { id: sessionId },
+      update: {
+        shop: shopDomain,
+        state: "fallback-token-exchange",
+        isOnline: false,
+        accessToken,
+        scope: payload.scope ?? null,
+      },
+      create: {
+        id: sessionId,
+        shop: shopDomain,
+        state: "fallback-token-exchange",
+        isOnline: false,
+        accessToken,
+        scope: payload.scope ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("failed to persist fallback offline session", {
+      shopDomain,
+      error: String(error),
+    });
+  }
+
+  return accessToken;
 }
 
 async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
