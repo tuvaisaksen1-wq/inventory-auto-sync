@@ -110,7 +110,7 @@ function isUserAccessToken(token: string) {
 async function exchangeIdTokenForOfflineAccessToken(
   shopDomain: string,
   idToken: string
-) {
+): Promise<{ token: string | null; error: string | null }> {
   try {
     const exchange = await shopify.api.auth.tokenExchange({
       shop: shopDomain,
@@ -119,15 +119,23 @@ async function exchangeIdTokenForOfflineAccessToken(
         "urn:shopify:params:oauth:token-type:offline-access-token",
     });
 
-    if (!exchange?.session?.accessToken) return null;
+    if (!exchange?.session?.accessToken) {
+      return {
+        token: null,
+        error: "SDK exchange returned empty session access token",
+      };
+    }
 
     await shopify.sessionStorage.storeSession(exchange.session);
-    return exchange.session.accessToken;
+    return { token: exchange.session.accessToken, error: null };
   } catch (error) {
+    const sdkError = `SDK exchange failed: ${String(error)}`;
     console.error("token exchange failed via sdk", {
       shopDomain,
       error: String(error),
     });
+    // Continue to HTTP fallback
+    console.warn(sdkError);
   }
 
   // Fallback: call OAuth exchange endpoint directly (same payload shape used by Shopify API lib).
@@ -135,7 +143,7 @@ async function exchangeIdTokenForOfflineAccessToken(
   const apiSecret = process.env.SHOPIFY_API_SECRET ?? "";
   if (!apiKey || !apiSecret) {
     console.error("token exchange fallback missing api credentials", { shopDomain });
-    return null;
+    return { token: null, error: "Fallback missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET" };
   }
 
   const response = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
@@ -158,12 +166,13 @@ async function exchangeIdTokenForOfflineAccessToken(
 
   if (!response.ok) {
     const errorText = await response.text();
+    const detailedError = `HTTP fallback exchange failed (${response.status}): ${errorText}`;
     console.error("token exchange failed via http fallback", {
       shopDomain,
       status: response.status,
       body: errorText,
     });
-    return null;
+    return { token: null, error: detailedError };
   }
 
   const payload = (await response.json()) as {
@@ -172,11 +181,12 @@ async function exchangeIdTokenForOfflineAccessToken(
   };
   const accessToken = payload.access_token ?? null;
   if (!accessToken || isUserAccessToken(accessToken)) {
+    const invalidTokenError = `Fallback returned invalid token type: ${accessToken?.slice(0, 6) ?? "none"}`;
     console.error("token exchange fallback returned invalid token type", {
       shopDomain,
       tokenPrefix: accessToken?.slice(0, 6) ?? "none",
     });
-    return null;
+    return { token: null, error: invalidTokenError };
   }
 
   try {
@@ -206,7 +216,7 @@ async function exchangeIdTokenForOfflineAccessToken(
     });
   }
 
-  return accessToken;
+  return { token: accessToken, error: null };
 }
 
 async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
@@ -266,9 +276,17 @@ function decodeShopFromIdToken(token: string | null) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const authResult = await authenticate.admin(request);
+  let authResult:
+    | Awaited<ReturnType<typeof authenticate.admin>>
+    | null = null;
+  try {
+    authResult = await authenticate.admin(request);
+  } catch (error) {
+    console.warn("authenticate.admin failed in supplier-setup", String(error));
+  }
   const authenticatedShop = authResult.session?.shop ?? null;
   const idToken = getBearerToken(request.headers.get("authorization"));
+  let tokenDerivationError: string | null = null;
 
   if (!N8N_SUPPLIER_SETUP_URL) {
     return json(
@@ -322,8 +340,12 @@ export async function action({ request }: ActionFunctionArgs) {
     accessToken = "";
   }
   if (!accessToken && shopDomain && idToken) {
-    accessToken =
-      (await exchangeIdTokenForOfflineAccessToken(shopDomain, idToken)) ?? "";
+    const exchangeResult = await exchangeIdTokenForOfflineAccessToken(
+      shopDomain,
+      idToken
+    );
+    accessToken = exchangeResult.token ?? "";
+    tokenDerivationError = exchangeResult.error;
   }
   if (isUserAccessToken(accessToken)) {
     accessToken = "";
@@ -379,6 +401,11 @@ export async function action({ request }: ActionFunctionArgs) {
         ok: false,
         message:
           "Missing Shopify Admin API access token. Could not derive offline token for this shop.",
+        debug: {
+          shopDomain,
+          hasAuthorizationHeader: Boolean(request.headers.get("authorization")),
+          tokenDerivationError,
+        },
       },
       { status: 400 }
     );
