@@ -227,7 +227,12 @@ const applySummary = (
         );
         return;
       }
-      const setupRes = await fetch("/api/supplier-setup", {
+      const setupUrl = new URL("/api/supplier-setup", window.location.origin);
+      if (shopDomain) setupUrl.searchParams.set("shop", shopDomain);
+      if (shopHost) setupUrl.searchParams.set("host", shopHost);
+      setupUrl.searchParams.set("embedded", "1");
+
+      const setupRes = await fetch(setupUrl.toString(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
