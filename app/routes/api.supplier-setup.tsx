@@ -276,15 +276,9 @@ function decodeShopFromIdToken(token: string | null) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  let authResult:
-    | Awaited<ReturnType<typeof authenticate.admin>>
-    | null = null;
-  try {
-    authResult = await authenticate.admin(request);
-  } catch (error) {
-    console.warn("authenticate.admin failed in supplier-setup", String(error));
-  }
+  const authResult = await authenticate.admin(request);
   const authenticatedShop = authResult.session?.shop ?? null;
+  const authenticatedAccessToken = authResult.session?.accessToken ?? "";
   const idToken = getBearerToken(request.headers.get("authorization"));
   let tokenDerivationError: string | null = null;
 
@@ -333,9 +327,12 @@ export async function action({ request }: ActionFunctionArgs) {
   if (isUserAccessToken(accessToken)) {
     accessToken = "";
   }
-  const sessionAccessToken = authResult?.session?.accessToken ?? "";
-  if (!accessToken && sessionAccessToken && !isUserAccessToken(sessionAccessToken)) {
-    accessToken = sessionAccessToken;
+  if (
+    !accessToken &&
+    authenticatedAccessToken &&
+    !isUserAccessToken(authenticatedAccessToken)
+  ) {
+    accessToken = authenticatedAccessToken;
   }
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
