@@ -188,8 +188,11 @@ async function exchangeIdTokenForOfflineAccessToken(
 
 async function getPrimaryLocationId(shopDomain: string, accessToken: string) {
   const url = `https://${shopDomain}/admin/api/2024-01/locations.json`;
+  const useBearer = isUserAccessToken(accessToken);
   const res = await fetch(url, {
-    headers: { "X-Shopify-Access-Token": accessToken },
+    headers: useBearer
+      ? { Authorization: `Bearer ${accessToken}` }
+      : { "X-Shopify-Access-Token": accessToken },
   });
 
   if (!res.ok) {
@@ -291,21 +294,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const testOnly = Boolean(input.test_only);
   // Prefer explicit token, then stored session token, then token exchange.
   let accessToken = toStringValue(input.access_token);
-  if (isUserAccessToken(accessToken)) {
-    accessToken = "";
-  }
   if (
     !accessToken &&
-    authenticatedAccessToken &&
-    !isUserAccessToken(authenticatedAccessToken)
+    authenticatedAccessToken
   ) {
     accessToken = authenticatedAccessToken;
   }
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
-  }
-  if (isUserAccessToken(accessToken)) {
-    accessToken = "";
   }
   if (!accessToken && shopDomain && idToken) {
     const exchangeResult = await exchangeIdTokenForOfflineAccessToken(
@@ -314,9 +310,6 @@ export async function action({ request }: ActionFunctionArgs) {
     );
     accessToken = exchangeResult.token ?? "";
     tokenDerivationError = exchangeResult.error;
-  }
-  if (isUserAccessToken(accessToken)) {
-    accessToken = "";
   }
 
   if (!supplierId || !name) {
@@ -408,6 +401,9 @@ export async function action({ request }: ActionFunctionArgs) {
           domain: shopDomain,
           platform: "shopify",
           access_token: accessToken || null,
+          access_token_type: isUserAccessToken(accessToken)
+            ? "user_bearer"
+            : "admin_x_shopify_access_token",
           location_id: locationId || null,
         }
       : null,
