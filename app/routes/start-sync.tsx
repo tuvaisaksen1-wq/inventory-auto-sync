@@ -15,6 +15,45 @@ const json = (data: unknown, init: ResponseInit = {}) => {
   return new Response(JSON.stringify(data), { ...init, headers });
 };
 
+function toRecord(value: unknown) {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function isUserAccessToken(token: string) {
+  return token.startsWith("shpua_");
+}
+
+function withNormalizedShopAuth(profile: Record<string, unknown>) {
+  const shop = toRecord(profile.shop);
+  if (!shop) return profile;
+
+  const token =
+    typeof shop.access_token === "string" ? shop.access_token : "";
+  const explicitType =
+    typeof shop.access_token_type === "string" ? shop.access_token_type : "";
+  const useBearer =
+    explicitType === "user_bearer" || isUserAccessToken(token);
+
+  const authHeaderName = useBearer
+    ? "Authorization"
+    : "X-Shopify-Access-Token";
+  const authHeaderValue = useBearer ? `Bearer ${token}` : token;
+
+  return {
+    ...profile,
+    shop: {
+      ...shop,
+      access_token_type: useBearer
+        ? "user_bearer"
+        : "admin_x_shopify_access_token",
+      auth_header_name: authHeaderName,
+      auth_header_value: authHeaderValue,
+    },
+  };
+}
+
 async function readSupplierId(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -62,7 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const payload = {
-    profile,
+    profile: withNormalizedShopAuth(profile as Record<string, unknown>),
     trigger: "manual",
     run_id: null as string | null,
   };
@@ -107,7 +146,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
         const statusValue =
           summarySource && typeof summarySource === "object"
-            ? (summarySource as any).status
+            ? (summarySource as Record<string, unknown>).status
             : null;
 
         const summary =
