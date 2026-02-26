@@ -2,7 +2,7 @@
 import type { ActionFunctionArgs } from "@react-router/node";
 import { query } from "../server/db.server";
 import { computeNextRunAt } from "../server/sync.server";
-import { authenticate } from "../shopify.server";
+import shopify, { authenticate } from "../shopify.server";
 import { prisma } from "../server/prisma.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
@@ -62,6 +62,18 @@ function toStringArray(value: unknown) {
 }
 
 async function getAccessTokenFromSession(shopDomain: string) {
+  // 1) Preferred: use Shopify session storage directly (same store auth uses).
+  try {
+    const offlineSessionId = shopify.api.session.getOfflineId(shopDomain);
+    const offlineSession =
+      await shopify.sessionStorage.loadSession(offlineSessionId);
+    if (offlineSession?.accessToken && !isUserAccessToken(offlineSession.accessToken)) {
+      return offlineSession.accessToken;
+    }
+  } catch (error) {
+    console.error("offline session lookup failed", { shopDomain, error: String(error) });
+  }
+
   // Session storage for Shopify auth lives in Prisma/DATABASE_URL.
   const offlineSession = await prisma.session.findFirst({
     where: {
@@ -126,6 +138,12 @@ async function exchangeIdTokenForOfflineAccessToken(
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("token exchange failed", {
+      shopDomain,
+      status: response.status,
+      body: errorText,
+    });
     return null;
   }
 
