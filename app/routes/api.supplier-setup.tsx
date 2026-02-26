@@ -1,5 +1,6 @@
 
 import type { ActionFunctionArgs } from "@react-router/node";
+import { RequestedTokenType } from "@shopify/shopify-api";
 import { query } from "../server/db.server";
 import { computeNextRunAt } from "../server/sync.server";
 import shopify, { authenticate } from "../shopify.server";
@@ -115,8 +116,7 @@ async function exchangeIdTokenForOfflineAccessToken(
     const exchange = await shopify.api.auth.tokenExchange({
       shop: shopDomain,
       sessionToken: idToken,
-      requestedTokenType:
-        "urn:shopify:params:oauth:token-type:offline-access-token",
+      requestedTokenType: RequestedTokenType.OfflineAccessToken,
     });
 
     if (!exchange?.session?.accessToken) {
@@ -332,6 +332,10 @@ export async function action({ request }: ActionFunctionArgs) {
   let accessToken = toStringValue(input.access_token);
   if (isUserAccessToken(accessToken)) {
     accessToken = "";
+  }
+  const sessionAccessToken = authResult?.session?.accessToken ?? "";
+  if (!accessToken && sessionAccessToken && !isUserAccessToken(sessionAccessToken)) {
+    accessToken = sessionAccessToken;
   }
   if (!accessToken && shopDomain) {
     accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
