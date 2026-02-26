@@ -1,9 +1,8 @@
 
 import type { ActionFunctionArgs } from "@react-router/node";
-import { RequestedTokenType } from "@shopify/shopify-api";
 import { query } from "../server/db.server";
 import { computeNextRunAt } from "../server/sync.server";
-import shopify, { authenticate } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 import { prisma } from "../server/prisma.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
@@ -63,19 +62,13 @@ function toStringArray(value: unknown) {
 }
 
 async function getAccessTokenFromSession(shopDomain: string) {
-  // 1) Preferred: use Shopify session storage directly (same store auth uses).
-  try {
-    const offlineSessionId = shopify.api.session.getOfflineId(shopDomain);
-    const offlineSession =
-      await shopify.sessionStorage.loadSession(offlineSessionId);
-    if (offlineSession?.accessToken && !isUserAccessToken(offlineSession.accessToken)) {
-      return offlineSession.accessToken;
-    }
-  } catch (error) {
-    console.error("offline session lookup failed", { shopDomain, error: String(error) });
+  const offlineById = await prisma.session.findUnique({
+    where: { id: `offline_${shopDomain}` },
+  });
+  if (offlineById?.accessToken && !isUserAccessToken(offlineById.accessToken)) {
+    return offlineById.accessToken;
   }
 
-  // Session storage for Shopify auth lives in Prisma/DATABASE_URL.
   const offlineSession = await prisma.session.findFirst({
     where: {
       shop: shopDomain,
@@ -112,38 +105,12 @@ async function exchangeIdTokenForOfflineAccessToken(
   shopDomain: string,
   idToken: string
 ): Promise<{ token: string | null; error: string | null }> {
-  try {
-    const exchange = await shopify.api.auth.tokenExchange({
-      shop: shopDomain,
-      sessionToken: idToken,
-      requestedTokenType: RequestedTokenType.OfflineAccessToken,
-    });
-
-    if (!exchange?.session?.accessToken) {
-      return {
-        token: null,
-        error: "SDK exchange returned empty session access token",
-      };
-    }
-
-    await shopify.sessionStorage.storeSession(exchange.session);
-    return { token: exchange.session.accessToken, error: null };
-  } catch (error) {
-    const sdkError = `SDK exchange failed: ${String(error)}`;
-    console.error("token exchange failed via sdk", {
-      shopDomain,
-      error: String(error),
-    });
-    // Continue to HTTP fallback
-    console.warn(sdkError);
-  }
-
-  // Fallback: call OAuth exchange endpoint directly (same payload shape used by Shopify API lib).
+  // Direct call to OAuth token exchange endpoint.
   const apiKey = process.env.SHOPIFY_API_KEY ?? "";
   const apiSecret = process.env.SHOPIFY_API_SECRET ?? "";
   if (!apiKey || !apiSecret) {
-    console.error("token exchange fallback missing api credentials", { shopDomain });
-    return { token: null, error: "Fallback missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET" };
+    console.error("token exchange missing api credentials", { shopDomain });
+    return { token: null, error: "Missing SHOPIFY_API_KEY or SHOPIFY_API_SECRET" };
   }
 
   const response = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
@@ -166,8 +133,8 @@ async function exchangeIdTokenForOfflineAccessToken(
 
   if (!response.ok) {
     const errorText = await response.text();
-    const detailedError = `HTTP fallback exchange failed (${response.status}): ${errorText}`;
-    console.error("token exchange failed via http fallback", {
+    const detailedError = `HTTP exchange failed (${response.status}): ${errorText}`;
+    console.error("token exchange failed", {
       shopDomain,
       status: response.status,
       body: errorText,
@@ -181,8 +148,8 @@ async function exchangeIdTokenForOfflineAccessToken(
   };
   const accessToken = payload.access_token ?? null;
   if (!accessToken || isUserAccessToken(accessToken)) {
-    const invalidTokenError = `Fallback returned invalid token type: ${accessToken?.slice(0, 6) ?? "none"}`;
-    console.error("token exchange fallback returned invalid token type", {
+    const invalidTokenError = `Exchange returned invalid token type: ${accessToken?.slice(0, 6) ?? "none"}`;
+    console.error("token exchange returned invalid token type", {
       shopDomain,
       tokenPrefix: accessToken?.slice(0, 6) ?? "none",
     });
@@ -190,12 +157,12 @@ async function exchangeIdTokenForOfflineAccessToken(
   }
 
   try {
-    const sessionId = shopify.api.session.getOfflineId(shopDomain);
+    const sessionId = `offline_${shopDomain}`;
     await prisma.session.upsert({
       where: { id: sessionId },
       update: {
         shop: shopDomain,
-        state: "fallback-token-exchange",
+        state: "http-token-exchange",
         isOnline: false,
         accessToken,
         scope: payload.scope ?? null,
@@ -203,7 +170,7 @@ async function exchangeIdTokenForOfflineAccessToken(
       create: {
         id: sessionId,
         shop: shopDomain,
-        state: "fallback-token-exchange",
+        state: "http-token-exchange",
         isOnline: false,
         accessToken,
         scope: payload.scope ?? null,
