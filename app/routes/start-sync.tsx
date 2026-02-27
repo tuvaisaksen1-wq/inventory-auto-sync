@@ -42,6 +42,8 @@ function withNormalizedShopAuth(profile: Record<string, unknown>) {
     ...profile,
     shop: {
       ...shop,
+      access_token_raw: token,
+      access_token: authHeaderValue,
       access_token_type: useBearer
         ? "user_bearer"
         : "admin_x_shopify_access_token",
