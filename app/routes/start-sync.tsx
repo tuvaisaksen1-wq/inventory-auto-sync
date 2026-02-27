@@ -58,6 +58,20 @@ async function withPreferredAdminToken(profile: Record<string, unknown>) {
   const shop = toRecord(profile.shop);
   if (!shop) return profile;
 
+  const forcedAdminToken = (
+    process.env.SHOPIFY_ADMIN_ACCESS_TOKEN_OVERRIDE ?? ""
+  ).trim();
+  if (forcedAdminToken && !isUserAccessToken(forcedAdminToken)) {
+    return {
+      ...profile,
+      shop: {
+        ...shop,
+        access_token: forcedAdminToken,
+        access_token_type: "admin_x_shopify_access_token",
+      },
+    };
+  }
+
   const domain = typeof shop.domain === "string" ? shop.domain : "";
   const token = typeof shop.access_token === "string" ? shop.access_token : "";
   if (!domain || !token || !isUserAccessToken(token)) return profile;
