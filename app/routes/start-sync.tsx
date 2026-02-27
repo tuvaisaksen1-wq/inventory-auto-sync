@@ -37,6 +37,13 @@ function withNormalizedShopAuth(profile: Record<string, unknown>) {
     ? "Authorization"
     : "X-Shopify-Access-Token";
   const authHeaderValue = useBearer ? `Bearer ${token}` : token;
+  const appUrl =
+    (process.env.SHOPIFY_APP_URL ?? process.env.APP_URL ?? "").replace(/\/$/, "");
+  const domain = typeof shop.domain === "string" ? shop.domain : "";
+  const proxyBaseUrl =
+    appUrl && domain
+      ? `${appUrl}/api/shopify-proxy?shop=${encodeURIComponent(domain)}`
+      : null;
 
   return {
     ...profile,
@@ -50,6 +57,13 @@ function withNormalizedShopAuth(profile: Record<string, unknown>) {
       auth_header_name: authHeaderName,
       auth_header_value: authHeaderValue,
       x_shopify_access_token: token,
+      proxy_base_url: proxyBaseUrl,
+      proxy_shop_url: proxyBaseUrl
+        ? `${proxyBaseUrl}&endpoint=${encodeURIComponent("/admin/api/2024-10/shop.json")}`
+        : null,
+      proxy_locations_url: proxyBaseUrl
+        ? `${proxyBaseUrl}&endpoint=${encodeURIComponent("/admin/api/2024-10/locations.json")}`
+        : null,
     },
   };
 }
