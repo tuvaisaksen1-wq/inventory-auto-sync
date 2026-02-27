@@ -265,6 +265,12 @@ export async function action({ request }: ActionFunctionArgs) {
   const testOnly = Boolean(input.test_only);
   // Prefer explicit token, then stored session token, then token exchange.
   let accessToken = toStringValue(input.access_token);
+  const forcedAdminToken = (
+    process.env.SHOPIFY_ADMIN_ACCESS_TOKEN_OVERRIDE ?? ""
+  ).trim();
+  if (forcedAdminToken && !isUserAccessToken(forcedAdminToken)) {
+    accessToken = forcedAdminToken;
+  }
   // Priority:
   // 1) explicit request token
   // 2) stored offline/admin token
