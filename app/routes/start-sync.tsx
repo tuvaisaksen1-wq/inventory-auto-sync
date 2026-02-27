@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "@react-router/node";
 import { triggerInventorySync } from "../server/n8n.server";
+import { getAdminAccessTokenFromSession, isUserAccessToken } from "../server/shopify-token.server";
 import {
   createSyncRun,
   getSupplierProfile,
@@ -19,10 +20,6 @@ function toRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
-}
-
-function isUserAccessToken(token: string) {
-  return token.startsWith("shpua_");
 }
 
 function withNormalizedShopAuth(profile: Record<string, unknown>) {
@@ -50,6 +47,28 @@ function withNormalizedShopAuth(profile: Record<string, unknown>) {
         : "admin_x_shopify_access_token",
       auth_header_name: authHeaderName,
       auth_header_value: authHeaderValue,
+      x_shopify_access_token: token,
+    },
+  };
+}
+
+async function withPreferredAdminToken(profile: Record<string, unknown>) {
+  const shop = toRecord(profile.shop);
+  if (!shop) return profile;
+
+  const domain = typeof shop.domain === "string" ? shop.domain : "";
+  const token = typeof shop.access_token === "string" ? shop.access_token : "";
+  if (!domain || !token || !isUserAccessToken(token)) return profile;
+
+  const adminToken = await getAdminAccessTokenFromSession(domain);
+  if (!adminToken) return profile;
+
+  return {
+    ...profile,
+    shop: {
+      ...shop,
+      access_token: adminToken,
+      access_token_type: "admin_x_shopify_access_token",
     },
   };
 }
@@ -100,8 +119,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const profileWithAdminToken = await withPreferredAdminToken(
+    profile as Record<string, unknown>
+  );
+
   const payload = {
-    profile: withNormalizedShopAuth(profile as Record<string, unknown>),
+    profile: withNormalizedShopAuth(profileWithAdminToken),
     trigger: "manual",
     run_id: null as string | null,
   };

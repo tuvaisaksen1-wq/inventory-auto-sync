@@ -4,6 +4,10 @@ import { query } from "../server/db.server";
 import { computeNextRunAt } from "../server/sync.server";
 import { authenticate } from "../shopify.server";
 import { prisma } from "../server/prisma.server";
+import {
+  getAdminAccessTokenFromSession,
+  isUserAccessToken,
+} from "../server/shopify-token.server";
 
 const json = (data: unknown, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -61,44 +65,11 @@ function toStringArray(value: unknown) {
   return [];
 }
 
-async function getAccessTokenFromSession(shopDomain: string) {
-  const offlineById = await prisma.session.findUnique({
-    where: { id: `offline_${shopDomain}` },
-  });
-  if (offlineById?.accessToken && !isUserAccessToken(offlineById.accessToken)) {
-    return offlineById.accessToken;
-  }
-
-  const offlineSession = await prisma.session.findFirst({
-    where: {
-      shop: shopDomain,
-      isOnline: false,
-      NOT: { accessToken: { startsWith: "shpua_" } },
-    },
-    orderBy: { expires: "desc" },
-  });
-  const offlineToken = offlineSession?.accessToken ?? null;
-  if (offlineToken) return offlineToken;
-
-  const fallbackSession = await prisma.session.findFirst({
-    where: {
-      shop: shopDomain,
-      NOT: { accessToken: { startsWith: "shpua_" } },
-    },
-    orderBy: [{ isOnline: "asc" }, { expires: "desc" }],
-  });
-  return fallbackSession?.accessToken ?? null;
-}
-
 function getBearerToken(authorizationHeader: string | null) {
   if (!authorizationHeader) return null;
   const [scheme, value] = authorizationHeader.split(" ");
   if (!scheme || !value) return null;
   return scheme.toLowerCase() === "bearer" ? value : null;
-}
-
-function isUserAccessToken(token: string) {
-  return token.startsWith("shpua_");
 }
 
 async function exchangeIdTokenForOfflineAccessToken(
@@ -294,14 +265,13 @@ export async function action({ request }: ActionFunctionArgs) {
   const testOnly = Boolean(input.test_only);
   // Prefer explicit token, then stored session token, then token exchange.
   let accessToken = toStringValue(input.access_token);
-  if (
-    !accessToken &&
-    authenticatedAccessToken
-  ) {
-    accessToken = authenticatedAccessToken;
-  }
+  // Priority:
+  // 1) explicit request token
+  // 2) stored offline/admin token
+  // 3) token exchange from ID token
+  // 4) authenticated session token (may be shpua_)
   if (!accessToken && shopDomain) {
-    accessToken = (await getAccessTokenFromSession(shopDomain)) ?? "";
+    accessToken = (await getAdminAccessTokenFromSession(shopDomain)) ?? "";
   }
   if (!accessToken && shopDomain && idToken) {
     const exchangeResult = await exchangeIdTokenForOfflineAccessToken(
@@ -310,6 +280,13 @@ export async function action({ request }: ActionFunctionArgs) {
     );
     accessToken = exchangeResult.token ?? "";
     tokenDerivationError = exchangeResult.error;
+  }
+  if (!accessToken && authenticatedAccessToken) {
+    accessToken = authenticatedAccessToken;
+  }
+  if (isUserAccessToken(accessToken) && shopDomain) {
+    const adminToken = await getAdminAccessTokenFromSession(shopDomain);
+    if (adminToken) accessToken = adminToken;
   }
 
   if (!supplierId || !name) {
