@@ -29,6 +29,7 @@ export async function loader() {
   const buildTime = pickEnv("BUILD_TIME", "RAILWAY_DEPLOYMENT_CREATED_AT");
   const service = pickEnv("RAILWAY_SERVICE_NAME");
   const deploymentId = pickEnv("RAILWAY_DEPLOYMENT_ID");
+  const adminTokenOverride = (process.env.SHOPIFY_ADMIN_ACCESS_TOKEN_OVERRIDE ?? "").trim();
   const fingerprint =
     (gitCommit && `commit:${gitCommit}`) ||
     (buildTime && `build_time:${buildTime}`) ||
@@ -52,6 +53,10 @@ export async function loader() {
       time: buildTime,
       service,
       deployment_id: deploymentId,
+      has_admin_token_override: Boolean(adminTokenOverride),
+      admin_token_override_prefix: adminTokenOverride
+        ? adminTokenOverride.slice(0, 6)
+        : null,
     },
   });
 }
