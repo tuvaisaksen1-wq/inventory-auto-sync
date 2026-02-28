@@ -1,8 +1,8 @@
 import type { Session } from "@shopify/shopify-api";
 import { prisma } from "./prisma.server";
 
-export function isUserAccessToken(token: string) {
-  return token.startsWith("shpua_");
+export function isUserAccessToken(token: unknown) {
+  return typeof token === "string" && token.startsWith("shpua_");
 }
 
 export async function getAdminAccessTokenFromSession(shopDomain: string) {
