@@ -1,16 +1,13 @@
-import { json } from "@remix-run/node";
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import { data } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+import { requireInternalToken } from "../../src/middleware/internalAuth";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const authHeader = request.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "").trim();
+  requireInternalToken(request);
 
-  if (!token || token !== process.env.INTERNAL_API_SECRET) {
-    return json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  return json({
+  return data({
     suppliers: [],
     message: "Suppliers endpoint works",
   });
 }
+
