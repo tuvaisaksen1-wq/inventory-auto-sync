@@ -118,7 +118,7 @@ async function handleRequest(request: Request) {
   }
 
   const header = resolveHeader(accessToken);
-  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const normalizedEndpoint = `/${endpoint.replace(/^\/+/, "")}`;
   const url = `https://${shopDomain}${normalizedEndpoint}`;
 
   const response = await fetch(url, {
