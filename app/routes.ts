@@ -15,6 +15,7 @@ export default [
   { path: "/api/shopify-auth-check", file: "routes/api.shopify-auth-check.tsx" },
   { path: "/api/shopify-proxy", file: "routes/api.shopify-proxy.tsx" },
   { path: "/api/supplier-setup", file: "routes/api.supplier-setup.tsx" },
+  { path: "/api/suppliers", file: "routes/api.suppliers.tsx" },
   { path: "/api/suppliers/:supplier_id", file: "routes/api.suppliers.$supplier_id.tsx" },
   {
     path: "/app",
@@ -28,7 +29,6 @@ export default [
       { path: "suppliers/new", file: "routes/app.suppliers.new.tsx" },
     ],
   },
-  // Legacy direct routes (optional)
   { path: "/dashboard", file: "routes/dashboard.tsx" },
   { path: "/suppliers", file: "routes/suppliers.tsx" },
   { path: "/products", file: "routes/products.tsx" },
