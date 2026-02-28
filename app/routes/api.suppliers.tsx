@@ -1,13 +1,12 @@
-import { data } from "react-router";
-import type { LoaderFunctionArgs } from "react-router";
-import { requireInternalToken } from "../../src/middleware/internalAuth";
+export function requireInternalToken(request: Request): void {
+  const header = request.headers.get("Authorization");
+  const token = header?.replace("Bearer ", "").trim();
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  requireInternalToken(request);
-
-  return data({
-    suppliers: [],
-    message: "Suppliers endpoint works",
-  });
+  if (!token || token !== process.env.INTERNAL_API_SECRET) {
+    throw new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
 
