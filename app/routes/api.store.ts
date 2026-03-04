@@ -1,9 +1,8 @@
-import { prisma } from "../server/prisma.server";
+import { json } from "@remix-run/node";
 
 export async function loader() {
-  const session = await prisma.session.findFirst({
-    where: { isOnline: false }
+  return json({
+    name: "connected",
+    url: "connected"
   });
-
-  return new Response(JSON.stringify(session));
 }
