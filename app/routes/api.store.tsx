@@ -23,8 +23,8 @@ export async function loader() {
       );
     }
 
-    // Fetch location_id from Shopify Admin API server-side (token never leaves server)
-    let location_id: string | null = null;
+    // Fetch locations from Shopify Admin API server-side
+    let locations: Array<{id: string; name: string}> = [];
     try {
       const res = await fetch(
         `https://${session.shop}/admin/api/2024-10/locations.json`,
@@ -32,14 +32,17 @@ export async function loader() {
       );
       if (res.ok) {
         const data = await res.json();
-        location_id = data.locations?.[0]?.id?.toString() ?? null;
+        locations = data.locations?.map((loc: any) => ({
+          id: loc.id.toString(),
+          name: loc.name,
+        })) ?? [];
       }
     } catch (e) {
-      console.error("Failed to fetch location_id:", e);
+      console.error("Failed to fetch locations:", e);
     }
 
     return Response.json(
-      { shop: session.shop, location_id },
+      { shop: session.shop, locations },
       { headers: CORS_HEADERS }
     );
 
