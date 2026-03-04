@@ -41,16 +41,17 @@ ENV NODE_ENV=production
 
 COPY package.json package-lock.json* ./
 
-# Kun prod deps i runtime
+# Installer production deps
 RUN npm install --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
-COPY prisma ./prisma
+# Kopier hele appen først
+COPY . .
 
-# Prisma client må genereres i runtime-image
+# Generer Prisma client ETTER at alt er kopiert
 RUN npx prisma generate
 
-COPY . .
+# Kopier build fra builder
 COPY --from=builder /app/build ./build
 
 EXPOSE 3000
