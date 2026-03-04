@@ -1,5 +1,17 @@
 import { prisma } from "../server/prisma.server";
 
+export async function action({ request }: { request: Request }) {
+  // Handle OPTIONS preflight
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
+
 export async function loader() {
   try {
     const session = await prisma.session.findFirst({
@@ -23,7 +35,6 @@ export async function loader() {
 
   } catch (error) {
     console.error("API /api/store error:", error);
-    return Response.json({ error: "Server error" }, { status: 500 });
+    return Response.json({ error: "Server error" }, { status: 500, headers: { "Access-Control-Allow-Origin": "*" } });
   }
-  
 }
