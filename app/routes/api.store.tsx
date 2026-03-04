@@ -1,8 +1,13 @@
-import { json } from "@react-router/node";
-
 export async function loader() {
-  return json({
-    status: "ok",
-    message: "store route works"
-  });
+  return new Response(
+    JSON.stringify({
+      status: "ok",
+      message: "store route works"
+    }),
+    {
+      headers: {
+        "Content-Type": "application/json"
+      }
+    }
+  );
 }
