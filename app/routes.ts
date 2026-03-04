@@ -18,6 +18,7 @@ export default [
 { path: "/api/suppliers", file: "routes/api.suppliers.tsx" },
 { path: "/api/suppliers/:supplier_id", file: "routes/api.suppliers.$supplier_id.tsx" },
 { path: "/api/store", file: "routes/_api.store.tsx" },
+  { path: "/api/store", file: "routes/_api.store.tsx" },
   {
     path: "/app",
     file: "routes/app.tsx",
