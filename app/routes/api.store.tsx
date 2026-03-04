@@ -1,5 +1,5 @@
-import { json } from "@remix-run/node";
-import { pool } from "~/db.server"; // hvis du har database connection
+import { json } from "@react-router/node";
+import { pool } from "~/db.server";
 
 export async function loader() {
   try {
