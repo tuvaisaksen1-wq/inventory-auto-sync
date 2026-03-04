@@ -1,21 +1,5 @@
-import { prisma } from "../server/prisma.server";
+import { PrismaClient } from "@prisma/client";
 
-export async function loader() {
-  const store = await prisma.store.findFirst();
+const prisma = new PrismaClient();
 
-  if (!store) {
-    return new Response(JSON.stringify(null), {
-      headers: { "Content-Type": "application/json" }
-    });
-  }
-
-  return new Response(
-    JSON.stringify({
-      name: store.shop,
-      url: store.shop
-    }),
-    {
-      headers: { "Content-Type": "application/json" }
-    }
-  );
-}
+export { prisma };
