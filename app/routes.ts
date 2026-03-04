@@ -14,11 +14,6 @@ export default [
 
   { path: "/webhooks/app/uninstalled", file: "routes/webhooks.app.uninstalled.tsx" },
   { path: "/webhooks/app/scopes_update", file: "routes/webhooks.app.scopes_update.tsx" },
-
-  { path: "/api/shopify-auth-check", file: "routes/api.shopify-auth-check.tsx" },
-  { path: "/api/supplier-setup", file: "routes/api.supplier-setup.tsx" },
-  { path: "/api/suppliers", file: "routes/api.suppliers.tsx" },
-  { path: "/api/suppliers/:supplier_id", file: "routes/api.suppliers.$supplier_id.tsx" },
   { path: "/api/store", file: "routes/api.store.tsx" },
 
   {
