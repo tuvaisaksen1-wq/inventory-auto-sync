@@ -1,13 +1,15 @@
+import { json } from "@remix-run/node";
+import prisma from "../db.server";
+
 export async function loader() {
-  return new Response(
-    JSON.stringify({
-      status: "ok",
-      message: "store route works"
-    }),
-    {
-      headers: {
-        "Content-Type": "application/json"
-      }
-    }
-  );
+  const store = await prisma.store.findFirst();
+
+  if (!store) {
+    return json(null);
+  }
+
+  return json({
+    name: store.shop,
+    url: store.shop
+  });
 }
