@@ -1,4 +1,4 @@
-import { json } from "@remix-run/node";
+import { data } from "react-router";
 import { prisma } from "~/server/prisma.server";
 
 export async function loader() {
@@ -7,13 +7,13 @@ export async function loader() {
   });
 
   if (!session) {
-    return json({ error: "No Shopify session found" }, { 
+    return data({ error: "No Shopify session found" }, { 
       status: 404,
       headers: { "Access-Control-Allow-Origin": "*" }
     });
   }
 
-  return json({
+  return data({
     shop: session.shop,
     access_token: session.accessToken,
     location_id: null
