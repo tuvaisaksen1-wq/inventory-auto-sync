@@ -31,16 +31,13 @@ export default [
       { path: "products", file: "routes/app.products.tsx" },
       { path: "settings", file: "routes/app.settings.tsx" },
       { path: "suppliers", file: "routes/app.suppliers.tsx" },
-      { path: "suppliers/new", file: "routes/app.suppliers.new.tsx" },
-    ],
+      { path: "suppliers/new", file: "routes/app.suppliers.new.tsx" }
+    ]
   },
 
   { path: "/dashboard", file: "routes/dashboard.tsx" },
   { path: "/suppliers", file: "routes/suppliers.tsx" },
   { path: "/products", file: "routes/products.tsx" },
   { path: "/activity", file: "routes/activity.tsx" },
-  { path: "/settings", file: "routes/settings.tsx" },
-  { path: "/add-supplier", file: "routes/add-supplier.tsx" },
-] satisfies RouteConfig;
 ```
 
