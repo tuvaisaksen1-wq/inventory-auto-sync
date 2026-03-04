@@ -1,7 +1,8 @@
 import { json } from "@remix-run/node";
-import prisma from "../server/db.server";
+import prisma from "../server/prisma.server";
 
 export async function loader() {
+
   const store = await prisma.store.findFirst();
 
   if (!store) {
