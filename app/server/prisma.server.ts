@@ -1,14 +1,21 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../server/prisma.server";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined;
+export async function loader() {
+  const store = await prisma.store.findFirst();
+
+  if (!store) {
+    return new Response(JSON.stringify(null), {
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  return new Response(
+    JSON.stringify({
+      name: store.shop,
+      url: store.shop
+    }),
+    {
+      headers: { "Content-Type": "application/json" }
+    }
+  );
 }
-
-const prisma = globalThis.__prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__prisma = prisma;
-}
-
-export { prisma };
