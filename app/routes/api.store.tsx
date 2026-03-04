@@ -1,5 +1,5 @@
 import { data } from "react-router";
-import { prisma } from "~/server/prisma.server";
+import { prisma } from "../server/prisma.server";
 
 export async function loader() {
   const session = await prisma.session.findFirst({
@@ -19,16 +19,5 @@ export async function loader() {
     location_id: null
   }, {
     headers: { "Access-Control-Allow-Origin": "*" }
-  });
-}
-
-export function options() {
-  return new Response(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    }
   });
 }
