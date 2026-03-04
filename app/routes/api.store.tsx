@@ -1,9 +1,10 @@
-import prisma from "../server/prisma.server";
+import { prisma } from "../server/prisma.server";
 
 export async function loader() {
-  const store = await prisma.store.findFirst();
 
-  if (!store) {
+  const snapshot = await prisma.stock_snapshots.findFirst();
+
+  if (!snapshot) {
     return new Response(JSON.stringify(null), {
       headers: { "Content-Type": "application/json" }
     });
@@ -11,8 +12,8 @@ export async function loader() {
 
   return new Response(
     JSON.stringify({
-      name: store.shop,
-      url: store.shop
+      name: snapshot.tenant_id,
+      url: snapshot.tenant_id
     }),
     {
       headers: { "Content-Type": "application/json" }
