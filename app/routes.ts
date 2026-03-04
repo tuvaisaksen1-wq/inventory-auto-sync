@@ -39,5 +39,7 @@ export default [
   { path: "/suppliers", file: "routes/suppliers.tsx" },
   { path: "/products", file: "routes/products.tsx" },
   { path: "/activity", file: "routes/activity.tsx" },
-```
+  { path: "/settings", file: "routes/settings.tsx" },
+  { path: "/add-supplier", file: "routes/add-supplier.tsx" }
+] satisfies RouteConfig;
 
