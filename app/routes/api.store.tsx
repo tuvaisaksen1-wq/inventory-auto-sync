@@ -1,4 +1,3 @@
-import { data } from "react-router";
 import { prisma } from "../server/prisma.server";
 
 export async function loader() {
@@ -7,13 +6,10 @@ export async function loader() {
   });
 
   if (!session) {
-    return data({ error: "No Shopify session found" }, { 
-      status: 404,
-      headers: { "Access-Control-Allow-Origin": "*" }
-    });
+    return Response.json({ error: "No session found" }, { status: 404 });
   }
 
-  return data({
+  return Response.json({
     shop: session.shop,
     access_token: session.accessToken,
     location_id: null
