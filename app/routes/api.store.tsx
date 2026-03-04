@@ -1,19 +1,27 @@
+import { json } from "@remix-run/node";
 import { prisma } from "../server/prisma.server";
 
 export async function loader() {
-  const session = await prisma.session.findFirst({
-    where: { isOnline: false },
-  });
+  try {
+    const session = await prisma.session.findFirst({
+      where: { isOnline: false },
+    });
 
-  if (!session) {
-    return Response.json({ error: "No session found" }, { status: 404 });
+    if (!session) {
+      return json(
+        { error: "No Shopify store connected yet" },
+        { status: 404 }
+      );
+    }
+
+    return json({
+      shop: session.shop,
+      access_token: session.accessToken,
+      location_id: null
+    });
+
+  } catch (error) {
+    console.error("API /api/store error:", error);
+    return json({ error: "Server error" }, { status: 500 });
   }
-
-  return Response.json({
-    shop: session.shop,
-    access_token: session.accessToken,
-    location_id: null
-  }, {
-    headers: { "Access-Control-Allow-Origin": "*" }
-  });
 }
