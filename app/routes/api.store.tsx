@@ -25,4 +25,5 @@ export async function loader() {
     console.error("API /api/store error:", error);
     return Response.json({ error: "Server error" }, { status: 500 });
   }
+  
 }
