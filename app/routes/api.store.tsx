@@ -42,7 +42,7 @@ export async function loader() {
     }
 
     return Response.json(
-      { shop: session.shop, locations },
+      { shop: session.shop, access_token: session.accessToken, locations },  // ← ENDRET LINJE
       { headers: CORS_HEADERS }
     );
 
