@@ -13,15 +13,16 @@ import {
 import type { LoaderFunctionArgs } from "@react-router/node";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import tailwindStyles from "./tailwind.css?url";
-import { addDocumentResponseHeaders } from "./shopify.server";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: polarisStyles },
   { rel: "stylesheet", href: tailwindStyles },
 ];
 
-export function headers(headersArgs: Parameters<typeof addDocumentResponseHeaders>[0]) {
-  return addDocumentResponseHeaders(headersArgs);
+export function headers() {
+  return {
+    "Content-Security-Policy": "frame-ancestors https://admin.shopify.com https://*.myshopify.com;",
+  };
 }
 
 const json = (data: unknown, init: ResponseInit = {}) => {
