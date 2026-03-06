@@ -1,4 +1,12 @@
-import { prisma } from "../server/prisma.server";
+export async function loader({ request }: { request: Request }) {
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  try {
+    
+    import { prisma } from "../server/prisma.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
