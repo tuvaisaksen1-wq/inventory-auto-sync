@@ -1,4 +1,19 @@
-import type { LoaderFunctionArgs } from "react-router";
+export async function loader({ request }: LoaderFunctionArgs) {
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
+
+  const authHeader = request.headers.get("Authorization");
+  
+  import type { LoaderFunctionArgs } from "react-router";
 import { prisma } from "../server/prisma.server";
 
 export async function action() {
