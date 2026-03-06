@@ -45,19 +45,17 @@ function normalizeUrl(rawValue: string) {
 }
 
 function resolveAppUrl() {
-  const urlFromShopifyVar = normalizeUrl(process.env.SHOPIFY_APP_URL ?? "");
-  if (urlFromShopifyVar && !APP_URL_PLACEHOLDERS.has(urlFromShopifyVar)) {
-    return urlFromShopifyVar;
-  }
+  const candidates = [
+    process.env.SHOPIFY_APP_URL ?? "",
+    process.env.APP_URL ?? "",
+    process.env.HOST ?? "",
+  ];
 
-  const urlFromAppVar = normalizeUrl(process.env.APP_URL ?? "");
-  if (urlFromAppVar && !APP_URL_PLACEHOLDERS.has(urlFromAppVar)) {
-    return urlFromAppVar;
-  }
-
-  const urlFromHost = normalizeUrl(process.env.HOST ?? "");
-  if (urlFromHost && !APP_URL_PLACEHOLDERS.has(urlFromHost)) {
-    return urlFromHost;
+  for (const candidate of candidates) {
+    const normalizedUrl = normalizeUrl(candidate);
+    if (normalizedUrl && !APP_URL_PLACEHOLDERS.has(normalizedUrl)) {
+      return normalizedUrl;
+    }
   }
 
   return CANONICAL_APP_URL;
