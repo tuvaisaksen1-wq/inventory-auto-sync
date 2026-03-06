@@ -1,11 +1,14 @@
-import { redirect } from "react-router";
-import type { LoaderFunctionArgs } from "@react-router/node";
+import { redirect } from "@remix-run/node";
+import type { LoaderFunctionArgs } from "@remix-run/node";
 
-export function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  return redirect(`/app${url.search}`);
-}
 
-export default function Index() {
-  return null;
+  const shop = url.searchParams.get("shop");
+
+  if (!shop) {
+    return redirect("/auth/login");
+  }
+
+  return redirect(`/app?shop=${shop}`);
 }
