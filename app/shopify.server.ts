@@ -20,11 +20,49 @@ const requiredScopes = [
 
 const scopes = Array.from(new Set([...envScopes, ...requiredScopes]));
 
+const APP_URL_PLACEHOLDERS = new Set([
+  "https://din-railway-app.up.railway.app",
+  "https://your-app-url.railway.app",
+]);
+
+function normalizeUrl(rawValue: string) {
+  const trimmedValue = rawValue.trim();
+  if (!trimmedValue) return null;
+
+  const valueWithScheme = /^https?:\/\//i.test(trimmedValue)
+    ? trimmedValue
+    : `https://${trimmedValue}`;
+
+  try {
+    const url = new URL(valueWithScheme);
+    if (!url.hostname) return null;
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function resolveAppUrl() {
+  const urlFromShopifyVar = normalizeUrl(process.env.SHOPIFY_APP_URL ?? "");
+  if (urlFromShopifyVar && !APP_URL_PLACEHOLDERS.has(urlFromShopifyVar)) {
+    return urlFromShopifyVar;
+  }
+
+  const urlFromAppVar = normalizeUrl(process.env.APP_URL ?? "");
+  if (urlFromAppVar && !APP_URL_PLACEHOLDERS.has(urlFromAppVar)) {
+    return urlFromAppVar;
+  }
+
+  return normalizeUrl(process.env.HOST ?? "") ?? "";
+}
+
+const appUrl = resolveAppUrl();
+
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY ?? "",
   apiSecretKey: process.env.SHOPIFY_API_SECRET ?? "",
   scopes,
-  appUrl: process.env.SHOPIFY_APP_URL ?? process.env.APP_URL ?? "",
+  appUrl,
   apiVersion: ApiVersion.January26,
   distribution: AppDistribution.AppStore,
 
