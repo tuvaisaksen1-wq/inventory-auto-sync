@@ -1,9 +1,8 @@
-import { redirect } from "@remix-run/node";
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import { redirect } from "react-router";
+import type { LoaderFunctionArgs } from "@react-router/node";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-
   const shop = url.searchParams.get("shop");
 
   if (!shop) {
@@ -11,4 +10,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   return redirect(`/app?shop=${shop}`);
+}
+
+export default function Index() {
+  return null;
 }
