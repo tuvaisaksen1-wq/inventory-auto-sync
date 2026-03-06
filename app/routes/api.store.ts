@@ -2,30 +2,26 @@ import { prisma } from "../server/prisma.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-export async function loader({ request }: { request: Request }) {
-
-  // Handle CORS preflight
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
+export async function loader() {
   try {
+
     const session = await prisma.session.findFirst({
       where: { isOnline: false },
+      orderBy: { expires: "desc" },
     });
 
     if (!session) {
-      return Response.json(
-        { error: "No Shopify store connected yet" },
+      return new Response(
+        JSON.stringify({ error: "No Shopify store connected yet" }),
         { status: 404, headers: CORS_HEADERS }
       );
     }
 
-    let locations: Array<{ id: string; name: string }> = [];
+    let location_id = null;
 
     try {
       const res = await fetch(
@@ -39,41 +35,27 @@ export async function loader({ request }: { request: Request }) {
 
       if (res.ok) {
         const data = await res.json();
-
-        locations =
-          data.locations?.map((loc: any) => ({
-            id: loc.id.toString(),
-            name: loc.name,
-          })) ?? [];
+        location_id = data.locations?.[0]?.id ?? null;
       }
-    } catch (e) {
-      console.error("Failed to fetch locations:", e);
+    } catch (err) {
+      console.error("Location fetch failed", err);
     }
 
-    return Response.json(
-      {
+    return new Response(
+      JSON.stringify({
         shop: session.shop,
         access_token: session.accessToken,
-        locations,
-      },
-      { headers: CORS_HEADERS }
+        location_id,
+      }),
+      { status: 200, headers: CORS_HEADERS }
     );
 
   } catch (error) {
-    console.error("API /api/store error:", error);
+    console.error(error);
 
-    return Response.json(
-      { error: "Server error" },
+    return new Response(
+      JSON.stringify({ error: "Server error" }),
       { status: 500, headers: CORS_HEADERS }
     );
   }
-}
-
-export async function action({ request }: { request: Request }) {
-
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
