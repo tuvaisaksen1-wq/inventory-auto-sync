@@ -1,6 +1,5 @@
 import { AppProvider } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
-import * as React from "react";
 import {
   Links,
   Meta,
@@ -9,7 +8,6 @@ import {
   ScrollRestoration,
   type LinksFunction,
   useLoaderData,
-  useLocation,
 } from "react-router";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import tailwindStyles from "./tailwind.css?url";
@@ -33,36 +31,12 @@ const json = (data: unknown, init: ResponseInit = {}) => {
 export function loader() {
   return json({
     apiKey: process.env.SHOPIFY_API_KEY ?? null,
-    host: process.env.SHOPIFY_HOST ?? null,
   });
 }
 
 export default function App() {
-  const data = useLoaderData() as { apiKey: string | null; host: string | null };
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const embeddedFromQuery =
-    searchParams.get("embedded") === "1" || searchParams.get("embedded") === "true";
-  const hostParam = searchParams.get("host");
-  const resolvedHost = hostParam ?? data.host ?? null;
-  const embedded = embeddedFromQuery || Boolean(resolvedHost);
+  const data = useLoaderData() as { apiKey: string | null };
   const apiKey = data.apiKey ?? undefined;
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const hostFromUrl = searchParams.get("host");
-    if (hostFromUrl) {
-      window.sessionStorage.setItem("shopify_host", hostFromUrl);
-      return;
-    }
-    if (data.host) {
-      const url = new URL(window.location.href);
-      url.searchParams.set("host", data.host);
-      url.searchParams.set("embedded", "1");
-      window.history.replaceState({}, "", url.toString());
-      return;
-    }
-  }, [location.search]);
 
   return (
     <html lang="en" className="h-full">
@@ -71,14 +45,7 @@ export default function App() {
         <Links />
       </head>
       <body className="min-h-full bg-slate-50">
-        {embedded && apiKey && resolvedHost ? (
-          <script
-            src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
-            data-api-key={apiKey}
-            data-host={resolvedHost}
-            data-force-redirect="true"
-          />
-        ) : null}
+        {apiKey ? <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js" data-api-key={apiKey} /> : null}
         <AppProvider i18n={enTranslations}>
           <Outlet />
         </AppProvider>
