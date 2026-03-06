@@ -2,7 +2,7 @@
 FROM node:20-slim AS builder
 
 RUN apt-get update \
-  && apt-get install -y openssl curl \
+  && apt-get install -y openssl curl postgresql-client \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,9 +27,9 @@ RUN npm run build
 FROM node:20-slim AS runner
 
 RUN apt-get update \
-  && apt-get install -y openssl curl \
+  && apt-get install -y openssl curl postgresql-client \
   && rm -rf /var/lib/apt/lists/*
-
+  
 WORKDIR /app
 ENV NODE_ENV=production
 
