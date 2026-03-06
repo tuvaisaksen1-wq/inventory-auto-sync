@@ -1,4 +1,4 @@
-client_id = "7964c46ff5b017b0fb5541d11946f0ef"
+@@ -2,27 +2,28 @@ client_id = "7964c46ff5b017b0fb5541d11946f0ef"
 name = "inventory-auto-sync-v2"
 application_url = "https://inventory-auto-sync-production.up.railway.app"
 embedded = true
@@ -24,6 +24,7 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
+  "https://inventory-auto-sync-production.up.railway.app/auth/callback"
   "https://inventory-auto-sync-production.up.railway.app/auth/callback",
   "https://inventory-auto-sync-production.up.railway.app/api/auth/callback"
 ]
