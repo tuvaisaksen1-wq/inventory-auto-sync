@@ -13,18 +13,15 @@ import {
 } from "react-router";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 import tailwindStyles from "./tailwind.css?url";
+import { addDocumentResponseHeaders } from "./shopify.server";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: polarisStyles },
   { rel: "stylesheet", href: tailwindStyles },
 ];
 
-export function headers() {
-  return {
-    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-    Pragma: "no-cache",
-    Expires: "0",
-  };
+export function headers(headersArgs: Parameters<typeof addDocumentResponseHeaders>[0]) {
+  return addDocumentResponseHeaders(headersArgs);
 }
 
 const json = (data: unknown, init: ResponseInit = {}) => {
