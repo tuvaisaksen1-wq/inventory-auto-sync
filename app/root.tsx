@@ -1,5 +1,6 @@
 import { AppProvider } from "@shopify/polaris";
 import enTranslations from "@shopify/polaris/locales/en.json";
+import * as React from "react";
 import {
   Links,
   Meta,
@@ -41,7 +42,22 @@ export function loader({ request }: LoaderFunctionArgs) {
 export default function App() {
   const data = useLoaderData() as { apiKey: string | null; host: string | null };
   const apiKey = data.apiKey ?? undefined;
-  const host = data.host ?? undefined;
+  const [resolvedHost, setResolvedHost] = React.useState<string | undefined>(data.host ?? undefined);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (data.host) {
+      window.sessionStorage.setItem("shopify_host", data.host);
+      setResolvedHost(data.host);
+      return;
+    }
+
+    const fallbackHost = window.sessionStorage.getItem("shopify_host") ?? undefined;
+    if (fallbackHost) {
+      setResolvedHost(fallbackHost);
+    }
+  }, [data.host]);
 
   return (
     <html lang="en" className="h-full">
@@ -50,11 +66,11 @@ export default function App() {
         <Links />
       </head>
       <body className="min-h-full bg-slate-50">
-        {apiKey && host ? (
+        {apiKey && resolvedHost ? (
           <script
             src="https://cdn.shopify.com/shopifycloud/app-bridge.js"
             data-api-key={apiKey}
-            data-host={host}
+            data-host={resolvedHost}
           />
         ) : null}
         <AppProvider i18n={enTranslations}>
