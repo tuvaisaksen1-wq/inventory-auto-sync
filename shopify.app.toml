@@ -24,5 +24,6 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://inventory-auto-sync-production.up.railway.app/auth/callback"
+  "https://inventory-auto-sync-production.up.railway.app/auth/callback",
+  "https://inventory-auto-sync-production.up.railway.app/api/auth/callback"
 ]
