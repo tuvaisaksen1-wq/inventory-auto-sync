@@ -12,8 +12,8 @@ export default [
   { path: "/auth/session-token", file: "routes/auth.session-token.tsx" },
   { path: "/auth/exit-iframe", file: "routes/auth.exit-iframe.tsx" },
 
-  { path: "/webhooks/app/uninstalled", file: "routes/webhooks.app.uninstalled.tsx" },
-  { path: "/webhooks/app/scopes_update", file: "routes/webhooks.app.scopes_update.tsx" },
+{ path: "/webhooks/app/uninstalled", file: "routes/webhooks.app.uninstalled.tsx" },
+{ path: "/webhooks/app/scopes_update", file: "routes/webhooks.app.scopes_update.tsx" },
 { path: "/api/store", file: "routes/api.store.ts" },
   {
     path: "/app",
