@@ -5,7 +5,6 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import { prisma } from "./server/prisma.server";
-import { persistOfflineAdminSession } from "./server/shopify-token.server";
 
 const envScopes = (process.env.SCOPES ?? "")
   .split(",")
@@ -28,13 +27,8 @@ const shopify = shopifyApp({
   appUrl: process.env.SHOPIFY_APP_URL ?? process.env.APP_URL ?? "",
   apiVersion: ApiVersion.January26,
   distribution: AppDistribution.AppStore,
-  // Backend sync requires a non-user Admin API token, not shpua user tokens.
-  useOnlineTokens: false,
-  hooks: {
-    afterAuth: async ({ session }) => {
-      await persistOfflineAdminSession(session);
-    },
-  },
+
+  // bruk kun standard session lagring
   sessionStorage: new PrismaSessionStorage(prisma),
 });
 
