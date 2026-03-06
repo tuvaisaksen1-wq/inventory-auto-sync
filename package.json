@@ -11,6 +11,7 @@
     "env": "shopify app env",
     "start": "react-router-serve ./build/server/index.js",
 "docker-start": "react-router-serve ./build/server/index.js",
+    "docker-start": "react-router-serve ./build/server/index.js",
     "setup": "prisma generate && prisma migrate deploy",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "shopify": "shopify",
@@ -18,6 +19,9 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "check:conflicts": "bash -lc \"if rg -n '^(<<<<<<<|=======|>>>>>>>)|^@@ ' app shopify.app.toml shopify.web.toml; then echo 'Merge/diff markers found'; exit 1; else echo 'No merge markers found'; fi\"",
+    "prebuild": "npm run check:conflicts"
   },
   "type": "module",
   "engines": {
@@ -43,37 +47,3 @@
     "react-router-dom": "^7.11.0",
     "vite-tsconfig-paths": "^5.1.4"
   },
-  "devDependencies": {
-    "@shopify/api-codegen-preset": "^1.2.0",
-    "@shopify/polaris-types": "^1.0.1",
-    "@types/eslint": "^9.6.1",
-    "@types/node": "^22.18.8",
-    "@types/react": "^18.3.25",
-    "@types/react-dom": "^18.3.7",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^8.57.1",
-    "eslint-import-resolver-typescript": "^3.10.1",
-    "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^4.6.2",
-    "graphql-config": "^5.1.1",
-    "postcss": "^8.5.6",
-    "prettier": "^3.6.2",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^5.9.3",
-    "vite": "^6.3.6"
-  },
-  "workspaces": [
-    "extensions/*"
-  ],
-  "trustedDependencies": [
-    "@shopify/plugin-cloudflare"
-  ],
-  "overrides": {
-    "p-map": "^4.0.0"
-  },
-  "author": "tuvaisaksen"
-}
