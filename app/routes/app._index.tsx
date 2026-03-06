@@ -9,8 +9,7 @@ import {
 } from "../server/sync.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Viktig: sikrer Shopify-session på /app
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   try {
     const [suppliers, products, activity] = await Promise.all([
@@ -19,8 +18,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       getRecentActivity(),
     ]);
 
-    // ✅ RETURNER DATA DIREKTE
     return {
+      shop: session.shop,
       suppliers,
       products,
       activity,
@@ -29,6 +28,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     console.error("Dashboard loader error:", error);
 
     return {
+      shop: session.shop,
       suppliers: [],
       products: [],
       activity: [],
@@ -39,6 +39,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function AppIndex() {
   const data = useLoaderData() as {
+    shop: string;
     suppliers: any[];
     products: any[];
     activity: any[];
