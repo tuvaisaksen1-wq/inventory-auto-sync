@@ -1,12 +1,4 @@
-export async function loader({ request }: { request: Request }) {
-
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
-  try {
-    
-    import { prisma } from "../server/prisma.server";
+import { prisma } from "../server/prisma.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -14,16 +6,13 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-export async function action({ request }: { request: Request }) {
-  // handle CORS preflight
+export async function loader({ request }: { request: Request }) {
+
+  // Handle CORS preflight
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
-}
-
-export async function loader() {
   try {
     const session = await prisma.session.findFirst({
       where: { isOnline: false },
@@ -69,6 +58,7 @@ export async function loader() {
       },
       { headers: CORS_HEADERS }
     );
+
   } catch (error) {
     console.error("API /api/store error:", error);
 
@@ -77,4 +67,13 @@ export async function loader() {
       { status: 500, headers: CORS_HEADERS }
     );
   }
+}
+
+export async function action({ request }: { request: Request }) {
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
