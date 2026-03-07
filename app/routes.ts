@@ -7,9 +7,47 @@ export default [
   { path: "/start-sync", file: "routes/start-sync.tsx" },
   { path: "/sync-status", file: "routes/sync-status.tsx" },
   { path: "/products/:supplier_id", file: "routes/products.$supplier_id.tsx" },
+codex/fix-oauth-and-installation-flow-in-shopify-app-015a5e
+  // Shopify OAuth/auth UI routes.
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
   // Shopify OAuth/auth UI routes.
   { path: "/auth", file: "routes/auth.tsx" },
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
+  // Shopify OAuth/auth UI routes.
+  { path: "/auth", file: "routes/auth.tsx" },
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
+  // Shopify OAuth/auth UI routes.
+  { path: "/auth", file: "routes/auth.tsx" },
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
+  // Shopify OAuth/auth UI routes.
+  { path: "/auth", file: "routes/auth.tsx" },
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-wljg7q
+  // Shopify OAuth/auth UI routes.
+  { path: "/auth", file: "routes/auth.tsx" },
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-34dsd9
+  // Shopify OAuth/auth UI routes.
+
+codex/fix-oauth-and-installation-flow-in-shopify-app-e35z65
+  // Shopify OAuth/auth UI routes.
+
+codex/fix-oauth-and-installation-flow-in-shopify-app-8lqqs8
+  // Shopify OAuth/auth UI routes.
+  
+codex/fix-oauth-and-installation-flow-in-shopify-app-hexsgy
+  // Shopify OAuth/auth UI routes.
+  main
+  { path: "/auth", file: "routes/auth.tsx" },
+  { path: "/auth/callback", file: "routes/auth.callback.tsx" },
+main
+main
+main
+main
   { path: "/auth/login", file: "routes/auth.login.tsx" },
   { path: "/auth/callback", file: "routes/auth.callback.tsx" },
   { path: "/auth/session-token", file: "routes/auth.session-token.tsx" },
