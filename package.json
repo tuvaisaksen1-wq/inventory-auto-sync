@@ -10,14 +10,16 @@
     "config:use": "shopify app config use",
     "env": "shopify app env",
     "start": "react-router-serve ./build/server/index.js",
-"docker-start": "react-router-serve ./build/server/index.js",
+    "docker-start": "react-router-serve ./build/server/index.js",
     "setup": "prisma generate && prisma migrate deploy",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "shopify": "shopify",
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "check:conflicts": "bash -lc 'set -euo pipefail; if command -v rg >/dev/null 2>&1; then if rg -n \"^(<<<<<<<|=======|>>>>>>>)|^@@ \" app shopify.app.toml shopify.web.toml; then echo \"Merge/diff markers found\"; exit 1; fi; else if grep -R -n -E \"^(<<<<<<<|=======|>>>>>>>)|^@@ \" app shopify.app.toml shopify.web.toml; then echo \"Merge/diff markers found\"; exit 1; fi; fi; echo \"No merge markers found\"'",
+    "prebuild": "npm run check:conflicts"
   },
   "type": "module",
   "engines": {
@@ -75,5 +77,6 @@
   "overrides": {
     "p-map": "^4.0.0"
   },
-  "author": "tuvaisaksen"
+  "author": "tuvaisaksen",
+  "version": "1.0.0"
 }
