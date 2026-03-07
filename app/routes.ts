@@ -8,7 +8,9 @@ export default [
   { path: "/sync-status", file: "routes/sync-status.tsx" },
   { path: "/products/:supplier_id", file: "routes/products.$supplier_id.tsx" },
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-hexsgy
   // Shopify OAuth/auth UI routes.
+  main
   { path: "/auth", file: "routes/auth.tsx" },
   { path: "/auth/callback", file: "routes/auth.callback.tsx" },
   { path: "/auth/login", file: "routes/auth.login.tsx" },
