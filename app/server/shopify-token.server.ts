@@ -34,6 +34,21 @@ export async function getAdminAccessTokenFromSession(shopDomain: string) {
   return fallbackSession?.accessToken ?? null;
 }
 
+export async function getStoredShopifyStore(shopDomain: string) {
+  if (!shopDomain) return null;
+  return prisma.shopifyStore.findUnique({ where: { shop: shopDomain } });
+}
+
+export async function persistShopifyStore(shop: string, accessToken: string) {
+  if (!shop || !accessToken) return;
+
+  await prisma.shopifyStore.upsert({
+    where: { shop },
+    update: { accessToken },
+    create: { shop, accessToken },
+  });
+}
+
 export async function persistOfflineAdminSession(session: Session) {
   if (!session.shop || !session.accessToken) return;
   if (isUserAccessToken(session.accessToken)) return;
@@ -88,4 +103,6 @@ export async function persistOfflineAdminSession(session: Session) {
       refreshTokenExpires: null,
     },
   });
+
+  await persistShopifyStore(session.shop, session.accessToken);
 }
