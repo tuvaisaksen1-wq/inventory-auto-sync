@@ -2,6 +2,10 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@react-router/node"
 
 import { authenticate } from "../shopify.server";
 import { getPrimaryLocationId } from "../server/shopify-store.server";
+import {
+  getStoredShopifyStore,
+  persistShopifyStore,
+} from "../server/shopify-token.server";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +30,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   try {
     const { session } = await authenticate.admin(request);
-    const location_id = await getPrimaryLocationId(session.shop, session.accessToken);
+
+    const storedStore = await getStoredShopifyStore(session.shop);
+    const accessToken = storedStore?.accessToken ?? session.accessToken;
+
+    if (!storedStore?.accessToken && session.accessToken) {
+      await persistShopifyStore(session.shop, session.accessToken);
+    }
+
+    const location_id = await getPrimaryLocationId(session.shop, accessToken);
 
     return jsonResponse({
       shop: session.shop,
