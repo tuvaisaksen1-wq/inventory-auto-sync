@@ -4,7 +4,15 @@ set -euo pipefail
 pattern='^(<<<<<<<|=======|>>>>>>>)|^@@ '
 
 if command -v rg >/dev/null 2>&1; then
+codex/fix-oauth-and-installation-flow-in-shopify-app-34dsd9
   if rg -n "$pattern" app package.json package-lock.json shopify.app.toml shopify.web.toml; then
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-e35z65
+  if rg -n "$pattern" app package.json package-lock.json shopify.app.toml shopify.web.toml; then
+
+  if rg -n "$pattern" app shopify.app.toml shopify.web.toml; then
+main
+main
     echo 'Merge/diff markers found'
     exit 1
   fi
@@ -15,7 +23,15 @@ else
     exit 1
   fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-34dsd9
   if grep -nE "$pattern" package.json package-lock.json shopify.app.toml shopify.web.toml; then
+=======
+codex/fix-oauth-and-installation-flow-in-shopify-app-e35z65
+  if grep -nE "$pattern" package.json package-lock.json shopify.app.toml shopify.web.toml; then
+
+  if grep -nE "$pattern" shopify.app.toml shopify.web.toml; then
+main
+main
     echo 'Merge/diff markers found'
     exit 1
   fi
