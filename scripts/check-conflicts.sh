@@ -4,6 +4,9 @@ set -euo pipefail
 pattern='^(<<<<<<<|=======|>>>>>>>)|^@@ '
 
 if command -v rg >/dev/null 2>&1; then
+codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
+  if rg -n "$pattern" app Dockerfile package.json package-lock.json shopify.app.toml shopify.web.toml; then
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
   if rg -n "$pattern" app Dockerfile package.json package-lock.json shopify.app.toml shopify.web.toml; then
 =======
@@ -29,6 +32,7 @@ main
 main
 main
 main
+main
     echo 'Merge/diff markers found'
     exit 1
   fi
@@ -39,6 +43,9 @@ else
     exit 1
   fi
 
+ codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
+  if grep -nE "$pattern" Dockerfile package.json package-lock.json shopify.app.toml shopify.web.toml; then
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
   if grep -nE "$pattern" Dockerfile package.json package-lock.json shopify.app.toml shopify.web.toml; then
 =======
@@ -61,19 +68,26 @@ codex/fix-oauth-and-installation-flow-in-shopify-app-e35z65
 main
 main
 main
+main
     echo 'Merge/diff markers found'
     exit 1
   fi
 fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
+ main
 # Guard against partially resolved conflict labels left in Dockerfile
 if grep -nE '^\s*(codex\/|main\s*$)' Dockerfile; then
   echo 'Potential unresolved merge labels found in Dockerfile'
   exit 1
 fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
 =======
+=======
+main
 main
 # Guard against partially resolved conflict labels left in routes.ts
 if grep -nE '^\s*(codex\/|main\s*$)' app/routes.ts; then
@@ -81,11 +95,14 @@ if grep -nE '^\s*(codex\/|main\s*$)' app/routes.ts; then
   exit 1
 fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
 =======
 codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
 =======
 codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
+main
 main
 main
 
@@ -95,11 +112,14 @@ if [ -f package-lock.json ]; then
   node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"
 fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-y74i0b
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
 =======
 codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
 =======
 =======
+main
 main
 main
 main
