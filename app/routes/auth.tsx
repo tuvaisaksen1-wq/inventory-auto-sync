@@ -1,11 +1,5 @@
-import type { LoaderFunctionArgs } from "@react-router/node";
 import { authenticate } from "../shopify.server";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  await authenticate.admin(request);
-  return null;
-}
-
-export default function Auth() {
-  return null;
-}
+export const loader = async ({ request }) => {
+  return authenticate.admin(request);
+};
