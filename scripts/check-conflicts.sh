@@ -4,6 +4,9 @@ set -euo pipefail
 pattern='^(<<<<<<<|=======|>>>>>>>)|^@@ '
 
 if command -v rg >/dev/null 2>&1; then
+codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
+  if rg -n "$pattern" app package.json package-lock.json shopify.app.toml shopify.web.toml; then
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
   if rg -n "$pattern" app package.json package-lock.json shopify.app.toml shopify.web.toml; then
 =======
@@ -21,6 +24,7 @@ main
 main
 main
 main
+main
     echo 'Merge/diff markers found'
     exit 1
   fi
@@ -31,6 +35,9 @@ else
     exit 1
   fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
+  if grep -nE "$pattern" package.json package-lock.json shopify.app.toml shopify.web.toml; then
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
   if grep -nE "$pattern" package.json package-lock.json shopify.app.toml shopify.web.toml; then
 =======
@@ -46,8 +53,6 @@ codex/fix-oauth-and-installation-flow-in-shopify-app-e35z65
   if grep -nE "$pattern" shopify.app.toml shopify.web.toml; then
 main
 main
-main
-main
     echo 'Merge/diff markers found'
     exit 1
   fi
@@ -59,7 +64,10 @@ if grep -nE '^\s*(codex\/|main\s*$)' app/routes.ts; then
   exit 1
 fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
+main
 
 node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
 
@@ -67,6 +75,9 @@ if [ -f package-lock.json ]; then
   node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"
 fi
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
 =======
+=======
+main
 main
 echo 'No merge markers found'
