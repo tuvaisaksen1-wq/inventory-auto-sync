@@ -11,8 +11,12 @@ COPY package.json package-lock.json* ./
 
 # Fail fast on unresolved merge markers / invalid JSON before npm install.
 RUN ! grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' package.json package-lock.json* \
+codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
   && node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))" \
   && if [ -f package-lock.json ]; then node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"; fi
+=======
+  && node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+main
 
 RUN npm install --include=optional --no-audit --no-fund
 
@@ -42,8 +46,12 @@ COPY package.json package-lock.json* ./
 
 # Fail fast on unresolved merge markers / invalid JSON before npm install.
 RUN ! grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' package.json package-lock.json* \
+codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
   && node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))" \
   && if [ -f package-lock.json ]; then node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"; fi
+=======
+  && node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+main
 
 RUN npm install --omit=dev --no-audit --no-fund \
   && npm cache clean --force
