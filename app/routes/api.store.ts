@@ -28,9 +28,37 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  const url = new URL(request.url);
+  const shopParam = url.searchParams.get("shop");
+
+  // ✅ Sjekk Authorization header (fra Base44 / ekstern klient)
+  const authHeader = request.headers.get("Authorization") ?? "";
+  const internalSecret = process.env.INTERNAL_API_SECRET ?? "";
+  const isInternalCall = internalSecret && authHeader === `Bearer ${internalSecret}`;
+
+  // Hvis det er intern kall med ?shop= → bruk stored token direkte (ingen Shopify sesjon nødvendig)
+  if (isInternalCall && shopParam) {
+    try {
+      const storedStore = await getStoredShopifyStore(shopParam);
+      if (!storedStore?.accessToken) {
+        return jsonResponse({ error: "Shop not found or not authenticated" }, 404);
+      }
+
+      const location_id = await getPrimaryLocationId(shopParam, storedStore.accessToken);
+
+      return jsonResponse({
+        shop: shopParam,
+        location_id,
+      });
+    } catch (error) {
+      console.error("api.store (internal) failed", error);
+      return jsonResponse({ error: "Could not load store details" }, 500);
+    }
+  }
+
+  // Standard Shopify embedded-sesjon
   try {
     const { session } = await authenticate.admin(request);
-
     const storedStore = await getStoredShopifyStore(session.shop);
     const accessToken = storedStore?.accessToken ?? session.accessToken;
 
@@ -39,25 +67,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     const location_id = await getPrimaryLocationId(session.shop, accessToken);
-
-    return jsonResponse({
-      shop: session.shop,
-      location_id,
-    });
+    return jsonResponse({ shop: session.shop, location_id });
   } catch (error) {
-    if (error instanceof Response) {
-      return error;
-    }
-
+    if (error instanceof Response) return error;
     console.error("api.store failed", error);
     return jsonResponse({ error: "Could not load store details" }, 500);
   }
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
-  return jsonResponse({ error: "Method not allowed" }, 405);
 }
