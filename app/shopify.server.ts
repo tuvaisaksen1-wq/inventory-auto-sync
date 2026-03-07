@@ -21,7 +21,7 @@ const requiredScopes = [
 
 const scopes = Array.from(new Set([...envScopes, ...requiredScopes]));
 
-const CANONICAL_APP_URL = "https://inventory-auto-sync-production.up.railway.app";
+const CANONICAL_APP_URL = "https://inventoryautosync.com";
 
 const APP_URL_PLACEHOLDERS = new Set([
   "https://din-railway-app.up.railway.app",
