@@ -10,7 +10,7 @@
     "config:use": "shopify app config use",
     "env": "shopify app env",
     "start": "react-router-serve ./build/server/index.js",
-"docker-start": "react-router-serve ./build/server/index.js",
+    "docker-start": "react-router-serve ./build/server/index.js",
     "setup": "prisma generate && prisma migrate deploy",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
     "shopify": "shopify",
@@ -75,5 +75,6 @@
   "overrides": {
     "p-map": "^4.0.0"
   },
-  "author": "tuvaisaksen"
+  "author": "tuvaisaksen",
+  "version": "1.0.0"
 }
