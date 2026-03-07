@@ -18,7 +18,7 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "check:conflicts": "bash -lc \"if rg -n '^(<<<<<<<|=======|>>>>>>>)|^@@ ' app shopify.app.toml shopify.web.toml; then echo 'Merge/diff markers found'; exit 1; else echo 'No merge markers found'; fi\"",
+    "check:conflicts": "bash -lc \"if command -v rg >/dev/null 2>&1; then if rg -n '^(<<<<<<<|=======|>>>>>>>)|^@@ ' app shopify.app.toml shopify.web.toml; then echo 'Merge/diff markers found'; exit 1; else echo 'No merge markers found'; fi; else files=$(find app -type f -name '*.ts' -o -name '*.tsx'); if grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' $files shopify.app.toml shopify.web.toml; then echo 'Merge/diff markers found'; exit 1; else echo 'No merge markers found'; fi; fi\"",
     "prebuild": "npm run check:conflicts"
   },
   "type": "module",
