@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "@react-router/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@react-router/node";
 import { authenticate } from "../shopify.server";
 import { getPrimaryLocationId } from "../server/shopify-store.server";
 
@@ -47,8 +47,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
-
-export async function action({ request }: { request: Request }) {
+export async function action({ request }: ActionFunctionArgs) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
