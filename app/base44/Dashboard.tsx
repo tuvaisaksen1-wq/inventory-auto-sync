@@ -37,10 +37,14 @@ interface Activity {
 }
 
 export default function Dashboard({
+  shop,
+  locationId,
   suppliers = [],
   products = [],
   activity = [],
 }: {
+  shop?: string | null;
+  locationId?: string | null;
   suppliers?: Supplier[];
   products?: Product[];
   activity?: Activity[];
@@ -66,11 +70,6 @@ export default function Dashboard({
   const hasIssues = suppliers.some((s) => s.status !== "active");
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border-2 border-red-700 bg-red-600 px-4 py-3 text-white shadow-lg">
-        <p className="text-base font-extrabold tracking-wide">BUILD MARKER: RED BOX ACTIVE</p>
-        <p className="text-sm font-semibold">If you can see this, frontend bundle is the newest deploy.</p>
-      </div>
-
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
@@ -83,6 +82,14 @@ export default function Dashboard({
           <span className="text-base leading-none">＋</span>
           Add Supplier
         </Link>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Connected Shopify store</p>
+        <p className="mt-1 text-sm font-semibold text-slate-900">{shop ?? "Not connected"}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Primary location: {locationId ?? "Missing location"}
+        </p>
       </div>
 
       <StatusBanner lastSync={lastSync} hasIssues={hasIssues} />

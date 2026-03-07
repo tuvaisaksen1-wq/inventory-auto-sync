@@ -5,6 +5,7 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import { prisma } from "./server/prisma.server";
+import { persistOfflineAdminSession } from "./server/shopify-token.server";
 
 const envScopes = (process.env.SCOPES ?? "")
   .split(",")
@@ -73,6 +74,11 @@ const shopify = shopifyApp({
 
   // bruk kun standard session lagring
   sessionStorage: new PrismaSessionStorage(prisma),
+  hooks: {
+    afterAuth: async ({ session }) => {
+      await persistOfflineAdminSession(session);
+    },
+  },
 });
 
 export default shopify;
