@@ -15,6 +15,7 @@ export default [
 { path: "/webhooks/app/uninstalled", file: "routes/webhooks.app.uninstalled.tsx" },
 { path: "/webhooks/app/scopes_update", file: "routes/webhooks.app.scopes_update.tsx" },
 { path: "/api/store", file: "routes/api.store.ts" },
+{ path: "/api/sync", file: "routes/api.sync.ts" },
   {
     path: "/app",
     file: "routes/app.tsx",
@@ -35,4 +36,3 @@ export default [
   { path: "/settings", file: "routes/settings.tsx" },
   { path: "/add-supplier", file: "routes/add-supplier.tsx" }
 ] satisfies RouteConfig;
-

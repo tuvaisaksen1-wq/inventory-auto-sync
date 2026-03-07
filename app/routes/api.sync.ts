@@ -10,10 +10,19 @@ const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? "";
 const BASE44_APP_ID = process.env.BASE44_APP_ID ?? "";
 const BASE44_SERVICE_KEY = process.env.BASE44_SERVICE_KEY ?? "";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...CORS_HEADERS,
+    },
   });
 
 // Call Base44 REST API as service role
@@ -42,6 +51,10 @@ async function base44Put(path: string, body: Record<string, unknown>) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   // Validate internal secret
   const authHeader = request.headers.get("Authorization") ?? "";
   if (authHeader !== `Bearer ${INTERNAL_SECRET}`) {
