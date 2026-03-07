@@ -77,5 +77,6 @@
   "overrides": {
     "p-map": "^4.0.0"
   },
-  "author": "tuvaisaksen"
+  "author": "tuvaisaksen",
+  "version": "1.0.0"
 }
