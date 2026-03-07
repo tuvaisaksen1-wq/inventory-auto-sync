@@ -36,4 +36,3 @@ export default [
   { path: "/settings", file: "routes/settings.tsx" },
   { path: "/add-supplier", file: "routes/add-supplier.tsx" }
 ] satisfies RouteConfig;
-
