@@ -5,7 +5,11 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import { prisma } from "./server/prisma.server";
-import { persistOfflineAdminSession } from "./server/shopify-token.server";
+import {
+  getAdminAccessTokenFromSession,
+  persistOfflineAdminSession,
+  persistShopifyStore,
+} from "./server/shopify-token.server";
 
 const envScopes = (process.env.SCOPES ?? "")
   .split(",")
@@ -77,6 +81,13 @@ const shopify = shopifyApp({
   hooks: {
     afterAuth: async ({ session }) => {
       await persistOfflineAdminSession(session);
+
+      if (!session.shop) return;
+
+      const offlineToken = await getAdminAccessTokenFromSession(session.shop);
+      if (offlineToken) {
+        await persistShopifyStore(session.shop, offlineToken);
+      }
     },
   },
 });
