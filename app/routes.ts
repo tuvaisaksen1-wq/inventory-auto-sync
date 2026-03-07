@@ -8,7 +8,7 @@ export default [
   { path: "/sync-status", file: "routes/sync-status.tsx" },
   { path: "/products/:supplier_id", file: "routes/products.$supplier_id.tsx" },
 
-  // Shopify OAuth/auth flow routes.
+  // Shopify OAuth/auth flow routes. Keep both callback routes to avoid merge regressions.
   { path: "/auth", file: "routes/auth.tsx" },
   { path: "/auth/callback", file: "routes/auth.callback.tsx" },
   { path: "/api/auth/callback", file: "routes/api.auth.callback.tsx" },
