@@ -10,6 +10,9 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Fail fast on unresolved merge markers / invalid JSON before npm install.
+codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
+RUN bash -lc "! grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' package.json package-lock.json* && node -e \"JSON.parse(require('fs').readFileSync('package.json','utf8'))\" && if [ -f package-lock.json ]; then node -e \"JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))\"; fi"
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
 RUN bash -lc "! grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' package.json package-lock.json* && node -e \"JSON.parse(require('fs').readFileSync('package.json','utf8'))\" && if [ -f package-lock.json ]; then node -e \"JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))\"; fi"
 =======
@@ -19,7 +22,6 @@ codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
   && if [ -f package-lock.json ]; then node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"; fi
 =======
   && node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
-main
 main
 
 RUN npm install --include=optional --no-audit --no-fund
@@ -49,6 +51,9 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
 
 # Fail fast on unresolved merge markers / invalid JSON before npm install.
+codex/fix-oauth-and-installation-flow-in-shopify-app-2hkwvn
+RUN bash -lc "! grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' package.json package-lock.json* && node -e \"JSON.parse(require('fs').readFileSync('package.json','utf8'))\" && if [ -f package-lock.json ]; then node -e \"JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))\"; fi"
+=======
 codex/fix-oauth-and-installation-flow-in-shopify-app-dl5ye1
 RUN bash -lc "! grep -nE '^(<<<<<<<|=======|>>>>>>>)|^@@ ' package.json package-lock.json* && node -e \"JSON.parse(require('fs').readFileSync('package.json','utf8'))\" && if [ -f package-lock.json ]; then node -e \"JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))\"; fi"
 =======
@@ -58,6 +63,7 @@ codex/fix-oauth-and-installation-flow-in-shopify-app-rm1c91
   && if [ -f package-lock.json ]; then node -e "JSON.parse(require('fs').readFileSync('package-lock.json','utf8'))"; fi
 =======
   && node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+main
 main
 main
 
