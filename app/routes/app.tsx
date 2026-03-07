@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "@react-router/node";
-import { Outlet, redirect, useLocation } from "react-router";
+import { Outlet, useLocation } from "react-router";
 import { NavMenu } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
@@ -11,30 +11,8 @@ const navItems = [
   { label: "Settings", href: "/app/settings" },
 ];
 
-function resolveBuildFingerprint() {
-  return (
-    process.env.RAILWAY_DEPLOYMENT_ID ||
-    process.env.RAILWAY_GIT_COMMIT_SHA ||
-    process.env.BUILD_TIME ||
-    process.env.GIT_COMMIT ||
-    process.env.SOURCE_VERSION ||
-    "dev"
-  );
-}
-
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
-
-  const url = new URL(request.url);
-  const fingerprint = resolveBuildFingerprint();
-  const currentVersion = url.searchParams.get("v");
-
-  // Cache-buster: tving Shopify til å laste riktig build
-  if (currentVersion !== fingerprint) {
-    url.searchParams.set("v", fingerprint);
-    return redirect(`${url.pathname}?${url.searchParams.toString()}`);
-  }
-
   return null;
 }
 
