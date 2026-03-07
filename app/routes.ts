@@ -8,16 +8,16 @@ export default [
   { path: "/sync-status", file: "routes/sync-status.tsx" },
   { path: "/products/:supplier_id", file: "routes/products.$supplier_id.tsx" },
 
-  // Shopify OAuth/auth flow routes. Keep both callback routes to avoid merge regressions.
+  // Shopify OAuth/auth UI routes.
   { path: "/auth", file: "routes/auth.tsx" },
   { path: "/auth/callback", file: "routes/auth.callback.tsx" },
-  { path: "/api/auth/callback", file: "routes/api.auth.callback.tsx" },
   { path: "/auth/login", file: "routes/auth.login.tsx" },
   { path: "/auth/session-token", file: "routes/auth.session-token.tsx" },
   { path: "/auth/exit-iframe", file: "routes/auth.exit-iframe.tsx" },
 
   { path: "/webhooks/app/uninstalled", file: "routes/webhooks.app.uninstalled.tsx" },
   { path: "/webhooks/app/scopes_update", file: "routes/webhooks.app.scopes_update.tsx" },
+  { path: "/api/auth/callback", file: "routes/api.auth.callback.tsx" },
   { path: "/api/store", file: "routes/api.store.ts" },
   { path: "/api/sync", file: "routes/api.sync.ts" },
   {
