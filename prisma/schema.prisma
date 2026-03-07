@@ -67,3 +67,11 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model ShopifyStore {
+  shop        String   @id
+  accessToken String   @map("access_token")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("shopify_stores")
+}
