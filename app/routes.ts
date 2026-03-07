@@ -10,6 +10,9 @@ export default [
 codex/fix-oauth-and-installation-flow-in-shopify-app-015a5e
   // Shopify OAuth/auth UI routes.
 
+codex/fix-oauth-and-installation-flow-in-shopify-app-34dsd9
+  // Shopify OAuth/auth UI routes.
+
 codex/fix-oauth-and-installation-flow-in-shopify-app-e35z65
   // Shopify OAuth/auth UI routes.
 
@@ -19,9 +22,6 @@ codex/fix-oauth-and-installation-flow-in-shopify-app-8lqqs8
 codex/fix-oauth-and-installation-flow-in-shopify-app-hexsgy
   // Shopify OAuth/auth UI routes.
   main
-main
-main
-main
   { path: "/auth", file: "routes/auth.tsx" },
   { path: "/auth/callback", file: "routes/auth.callback.tsx" },
   { path: "/auth/login", file: "routes/auth.login.tsx" },
